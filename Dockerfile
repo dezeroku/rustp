@@ -4,7 +4,7 @@ COPY z3 /z3
 WORKDIR /z3
 RUN python3 scripts/mk_make.py --prefix=/z3_built
 WORKDIR /z3/build
-RUN make -j${nproc}
+RUN make -j2
 RUN make install
 
 FROM ubuntu:20.04 as temp
