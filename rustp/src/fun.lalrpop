@@ -3,6 +3,11 @@ use crate::ast::{Expr, Opcode}; // (0)
 
 grammar;
 
+pub Exprs: Vec<Expr> = {
+    Expr => vec![*<>],
+    <mut b:Exprs> <a:Expr> => {b.push(*a); b},
+};
+
 pub Expr: Box<Expr> = { // (1)
     Expr ExprOp Factor => Box::new(Expr::Op(<>)), // (2)
     Factor,
