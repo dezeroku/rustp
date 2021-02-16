@@ -1,5 +1,19 @@
 use std::fmt;
 
+pub enum Clause {
+    Expr(Expr),
+    Assert(String),
+}
+
+impl fmt::Display for Clause {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Clause::Expr(x) => write!(f, "{}", x),
+            Clause::Assert(x) => write!(f, "{}", x),
+        }
+    }
+}
+
 pub enum Expr {
     Number(i32),
     Op(Box<Expr>, Opcode, Box<Expr>),
@@ -29,5 +43,21 @@ impl fmt::Display for Opcode {
             Opcode::Add => write!(f, "+"),
             Opcode::Sub => write!(f, "-"),
         }
+    }
+}
+
+pub struct Function {
+    pub name: String,
+    pub content: Vec<Clause>,
+}
+
+impl fmt::Display for Function {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut temp: String = "".to_owned();
+        for item in self.content.iter() {
+            temp += &item.to_string();
+            temp += "\t";
+        }
+        write!(f, "{} {}", self.name, temp)
     }
 }

@@ -1,7 +1,30 @@
 use std::str::FromStr;
-use crate::ast::{Expr, Opcode}; // (0)
+use crate::ast::{Expr, Opcode, Function, Clause}; // (0)
 
 grammar;
+
+pub Functions: Vec<Function> = {
+    Function => vec![<>],
+    <mut b: Functions> <a:Function> => {b.push(a); b},
+};
+
+pub Function: Function = {
+    "function" <n:Name> "{" <c:Clauses> "}" => Function{name: n, content: c},
+};
+
+pub Clauses: Vec<Clause> = {
+    Clause => vec![*<>],
+    <mut b:Clauses> <a:Clause> => {b.push(*a); b},
+};
+
+pub Clause: Box<Clause> = { // (1)
+    Expr => Box::new(Clause::Expr(*<>)),
+    Assert => <>,
+};
+
+pub Assert: Box<Clause> = {
+    "assert" "{" <a:Whatever> "}" => Box::new(Clause::Assert(a)),
+}
 
 pub Exprs: Vec<Expr> = {
     Expr => vec![*<>],
@@ -35,4 +58,12 @@ Term: Box<Expr> = {
 
 Num: i32 = {
     r"[0-9]+" => i32::from_str(<>).unwrap()
+};
+
+Name: String = {
+    r"[a-z]+" => <>.to_string()
+};
+
+Whatever: String = {
+    <a:r"ZZZ"> => a.to_string()
 };

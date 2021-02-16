@@ -63,11 +63,11 @@ fn main() {
     // Read its content
     // Write it down in prefix notation
     let filename = "example";
-    println!("In file {}", filename);
+    println!("In file {}:", filename);
 
     let contents = fs::read_to_string(filename).expect("Something went wrong reading the file");
 
-    println!("With text:\n{}", contents);
+    //println!("With text:\n{}", contents);
 
     //println!("Hello, world!");
     //println!("{}", check("22"));
@@ -78,7 +78,9 @@ fn main() {
     //println!("{}", unpack(fun::ExprParser::new().parse("2+2").unwrap()));
     //println!("{}", unpack(fun::ExprsParser::new().parse("2-2").unwrap()));
 
-    for item in fun::ExprsParser::new().parse(&contents).unwrap().iter() {
+    let t = fun::FunctionsParser::new().parse(&contents);
+    let u = t.expect("Parsing unsuccessful");
+    for item in u.iter() {
         println!("{}", item.to_string());
     }
 }
