@@ -10,8 +10,8 @@ fn main() {
     println!("In file {}:", filename);
 
     let contents = fs::read_to_string(filename).expect("Something went wrong reading the file");
-    parser::testo();
+    let t = parser::expr_expr(&contents).expect("Ooops");
     //println!("With text:\n{}", contents);
-
+    println!("Left: {}, Got: {}", t.0, t.1);
     //println!("Hello, world!");
 }

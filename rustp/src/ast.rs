@@ -14,6 +14,7 @@ impl fmt::Display for Clause {
     }
 }
 
+#[derive(PartialEq)]
 pub enum Expr {
     Number(i32),
     Op(Box<Expr>, Opcode, Box<Expr>),
@@ -28,6 +29,7 @@ impl fmt::Display for Expr {
     }
 }
 
+#[derive(PartialEq)]
 pub enum Opcode {
     Mul,
     Div,
