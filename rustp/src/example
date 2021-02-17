@@ -1,4 +1,7 @@
+function lol {
 2 + 2 * 2 - 2 / 4 * 2
 12
 4
 8 - 2 * 3
+assert { Z }
+}
