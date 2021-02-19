@@ -1,11 +1,11 @@
 use crate::ast;
 
+use crate::parser::astp;
+
 use nom::{
-    branch::alt, bytes::complete::take_while1, character::complete::alpha1,
-    character::complete::char, character::complete::digit1, character::complete::newline,
-    character::complete::one_of, character::complete::space0, character::is_alphabetic,
-    character::is_digit, combinator::map_res, combinator::opt, error::ErrorKind, map,
-    multi::fold_many1, multi::many0, multi::many1, named, sequence::tuple, IResult,
+    bytes::complete::take_while1, character::complete::char, character::complete::newline,
+    character::complete::one_of, character::complete::space0, multi::many0, sequence::tuple,
+    IResult,
 };
 
 use std::str::FromStr;
@@ -115,15 +115,8 @@ fn expr_number(input: &str) -> IResult<&str, Box<ast::Expr>> {
 }
 
 fn expr_variable(input: &str) -> IResult<&str, Box<ast::Expr>> {
-    variable(input)
+    astp::variable(input)
         .and_then(|(next_input, res)| Ok((next_input, Box::new(ast::Expr::Variable(res)))))
-}
-
-fn variable(input: &str) -> IResult<&str, ast::Variable> {
-    let l = |x: char| char::is_alphabetic(x) || '_' == x;
-
-    take_while1(l)(input)
-        .and_then(|(next_input, res)| Ok((next_input, ast::Variable::Named(res.to_string()))))
 }
 
 fn mult_or_divide(input: &str) -> IResult<&str, ast::Opcode> {
@@ -302,21 +295,6 @@ fn expr4() {
 fn expr_number1() {
     assert!(expr_number("1").is_ok());
     assert!(*expr_number("13").unwrap().1 == *Box::new(ast::Expr::Number(13)));
-}
-
-#[test]
-fn variable1() {
-    assert!(variable("1").is_err());
-    assert!(variable("a").is_ok());
-    assert!(variable("abc").unwrap().0 == "");
-    assert!(variable("abc").unwrap().1 == ast::Variable::Named("abc".to_string()));
-}
-
-#[test]
-fn variable2() {
-    assert!(variable("_a_b").is_ok());
-    assert!(variable("_a_b_c_").unwrap().0 == "");
-    assert!(variable("_a_b_c_").unwrap().1 == ast::Variable::Named("_a_b_c_".to_string()));
 }
 
 #[test]
