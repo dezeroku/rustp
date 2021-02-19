@@ -15,5 +15,9 @@ fn main() {
 
     let contents = fs::read_to_string(filename).expect("Something went wrong reading the file");
     let t = parser::expr(&contents).expect("Ooops");
-    println!("Left: |{}|, Got: |{}|", t.0, t.1);
+    println!("Left: |{}|", t.0);
+    println!("Got: |{}|", t.1);
+    //for item in t.1 {
+    //    println!("{}", item);
+    //}
 }

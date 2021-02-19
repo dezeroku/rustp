@@ -15,8 +15,22 @@ impl fmt::Display for Clause {
 }
 
 #[derive(PartialEq)]
+pub enum Variable {
+    Named(String),
+}
+
+impl fmt::Display for Variable {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Variable::Named(x) => write!(f, "{}", x),
+        }
+    }
+}
+
+#[derive(PartialEq)]
 pub enum Expr {
     Number(i32),
+    Variable(Variable),
     Op(Box<Expr>, Opcode, Box<Expr>),
 }
 
@@ -25,6 +39,7 @@ impl fmt::Display for Expr {
         match self {
             Expr::Number(x) => write!(f, "{}", x),
             Expr::Op(a, o, b) => write!(f, "({} {} {})", o, a, b),
+            Expr::Variable(x) => write!(f, "{}", x),
         }
     }
 }

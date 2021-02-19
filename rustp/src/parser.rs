@@ -3,15 +3,30 @@ extern crate nom;
 use crate::ast;
 
 use nom::{
-    branch::alt, bytes::complete::take_while1, character::complete::char,
-    character::complete::digit1, character::complete::one_of, character::complete::space0,
+    branch::alt, bytes::complete::take_while1, character::complete::alpha1,
+    character::complete::char, character::complete::digit1, character::complete::newline,
+    character::complete::one_of, character::complete::space0, character::is_alphabetic,
     character::is_digit, combinator::map_res, combinator::opt, error::ErrorKind, map,
-    multi::fold_many1, multi::many0, multi::many1, named, sequence::tuple, take_while, IResult,
+    multi::fold_many1, multi::many0, multi::many1, named, sequence::tuple, IResult,
 };
 use std::str::FromStr;
 
 fn digito(input: &str) -> IResult<&str, &str> {
     take_while1(|a| char::is_digit(a, 10))(input)
+}
+
+fn multiple_expr(input: &str) -> IResult<&str, Vec<ast::Expr>> {
+    let mut result = Vec::new();
+    expr(input).and_then(|(next_input, res)| {
+        result.push(*res);
+        many0(tuple((newline, expr)))(next_input).map(|(next_input, res_vec)| {
+            for item in res_vec {
+                let (_, val) = item;
+                result.push(*val);
+            }
+            (next_input, result)
+        })
+    })
 }
 
 // Concept: first answer to https://stackoverflow.com/questions/59508862/using-parser-combinator-to-parse-simple-math-expression
@@ -22,15 +37,17 @@ pub fn expr(input: &str) -> IResult<&str, Box<ast::Expr>> {
 
 fn primary_expr(input: &str) -> IResult<&str, Box<ast::Expr>> {
     expr_number(input).or_else(|_| {
-        char('(')(input)
-            .and_then(|(next_input, _)| space0(next_input))
-            .and_then(|(next_input, _)| expr_expr(next_input))
-            .and_then(|(next_input, res)| {
-                space0(next_input)
-                    .and_then(|(next_input, _)| char(')')(next_input))
-                    .and_then(|(next_input, _)| space0(next_input))
-                    .and_then(|(next_input, _)| Ok((next_input, res)))
-            })
+        expr_variable(input).or_else(|_| {
+            char('(')(input)
+                .and_then(|(next_input, _)| space0(next_input))
+                .and_then(|(next_input, _)| expr_expr(next_input))
+                .and_then(|(next_input, res)| {
+                    space0(next_input)
+                        .and_then(|(next_input, _)| char(')')(next_input))
+                        .and_then(|(next_input, _)| space0(next_input))
+                        .and_then(|(next_input, _)| Ok((next_input, res)))
+                })
+        })
     })
 }
 
@@ -102,6 +119,18 @@ fn expr_number(input: &str) -> IResult<&str, Box<ast::Expr>> {
     }
 }
 
+fn expr_variable(input: &str) -> IResult<&str, Box<ast::Expr>> {
+    variable(input)
+        .and_then(|(next_input, res)| Ok((next_input, Box::new(ast::Expr::Variable(res)))))
+}
+
+fn variable(input: &str) -> IResult<&str, ast::Variable> {
+    let l = |x: char| char::is_alphabetic(x) || '_' == x;
+
+    take_while1(l)(input)
+        .and_then(|(next_input, res)| Ok((next_input, ast::Variable::Named(res.to_string()))))
+}
+
 fn mult_or_divide(input: &str) -> IResult<&str, ast::Opcode> {
     let t = one_of("*/")(input);
     match t {
@@ -136,6 +165,12 @@ fn add_or_subtract(input: &str) -> IResult<&str, ast::Opcode> {
         }
         Err(a) => Err(a),
     }
+}
+
+#[test]
+fn multiple_expr1() {
+    assert!(multiple_expr("13 + 3\n 12 * 3").is_ok());
+    assert!(multiple_expr("13 + 3\n 12 * 3").unwrap().0 == "");
 }
 
 #[test]
@@ -203,7 +238,7 @@ fn mult_expr3() {
 fn primary_expr1() {
     assert!(primary_expr("1").is_ok());
     assert!(primary_expr("3").is_ok());
-    assert!(expr_number("13") == Ok(("", Box::new(ast::Expr::Number(13)))));
+    assert!(primary_expr("13") == Ok(("", Box::new(ast::Expr::Number(13)))));
     assert!(primary_expr("(3)").unwrap().0 == "");
     assert!(primary_expr("").is_err());
 }
@@ -257,9 +292,36 @@ fn expr_expr3() {
 }
 
 #[test]
+fn expr_expr4() {
+    assert!(
+        expr_expr("1 + x").unwrap().1
+            == Box::new(ast::Expr::Op(
+                Box::new(ast::Expr::Number(1)),
+                ast::Opcode::Add,
+                Box::new(ast::Expr::Variable(ast::Variable::Named("x".to_string())))
+            ))
+    );
+}
+
+#[test]
 fn expr_number1() {
     assert!(expr_number("1").is_ok());
     assert!(*expr_number("13").unwrap().1 == *Box::new(ast::Expr::Number(13)));
+}
+
+#[test]
+fn variable1() {
+    assert!(variable("1").is_err());
+    assert!(variable("a").is_ok());
+    assert!(variable("abc").unwrap().0 == "");
+    assert!(variable("abc").unwrap().1 == ast::Variable::Named("abc".to_string()));
+}
+
+#[test]
+fn variable2() {
+    assert!(variable("_a_b").is_ok());
+    assert!(variable("_a_b_c_").unwrap().0 == "");
+    assert!(variable("_a_b_c_").unwrap().1 == ast::Variable::Named("_a_b_c_".to_string()));
 }
 
 #[test]
