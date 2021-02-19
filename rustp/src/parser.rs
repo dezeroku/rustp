@@ -14,21 +14,14 @@ fn digito(input: &str) -> IResult<&str, &str> {
     take_while1(|a| char::is_digit(a, 10))(input)
 }
 
-//fn expr(input: &str) -> IResult<&str, ast::Expr> {
-//    match alt((expr, expr_number))(input) {
-//        Ok(a) => {let (input_next, res) = a;
-//        Err(e) => Err(e)
-//    }
-//    match t
-//}
+// Concept: first answer to https://stackoverflow.com/questions/59508862/using-parser-combinator-to-parse-simple-math-expression
 
-// concept: first answer to https://stackoverflow.com/questions/59508862/using-parser-combinator-to-parse-simple-math-expression
 pub fn expr(input: &str) -> IResult<&str, Box<ast::Expr>> {
     expr_expr(input)
 }
 
 fn primary_expr(input: &str) -> IResult<&str, Box<ast::Expr>> {
-    expr_number(input).or_else(|e| {
+    expr_number(input).or_else(|_| {
         char('(')(input)
             .and_then(|(next_input, _)| space0(next_input))
             .and_then(|(next_input, _)| expr_expr(next_input))
@@ -50,7 +43,7 @@ fn mult_expr_right(input: &str) -> IResult<&str, (ast::Opcode, Box<ast::Expr>)> 
     )
 }
 
-pub fn mult_expr(input: &str) -> IResult<&str, Box<ast::Expr>> {
+fn mult_expr(input: &str) -> IResult<&str, Box<ast::Expr>> {
     space0(input)
         .and_then(|(next_input, _)| primary_expr(next_input))
         .and_then(|(next_input, a)| {
@@ -79,7 +72,7 @@ fn add_expr_right(input: &str) -> IResult<&str, (ast::Opcode, Box<ast::Expr>)> {
     )
 }
 
-pub fn expr_expr(input: &str) -> IResult<&str, Box<ast::Expr>> {
+fn expr_expr(input: &str) -> IResult<&str, Box<ast::Expr>> {
     space0(input)
         .and_then(|(next_input, _)| mult_expr(next_input))
         .and_then(|(next_input, a)| {
@@ -236,14 +229,6 @@ fn primary_expr3() {
     assert!(primary_expr("1 - 1 + 1").is_ok());
     assert!(primary_expr("1 * 2 -3").is_ok());
     assert!(primary_expr("1 + 1 - 3").is_ok());
-    //    assert!(
-    //        *expr_expr("1 - 2 * 3").unwrap().1
-    //            == *Box::new(ast::Expr::Op(
-    //                Box::new(ast::Expr::Number(12)),
-    //                ast::Opcode::Mul,
-    //                Box::new(ast::Expr::Number(3))
-    //            ))
-    //    );
 }
 
 #[test]
@@ -305,22 +290,10 @@ fn number(input: &str) -> IResult<&str, i32> {
     }
 }
 
-//fn addition(input: &str) -> IResult<&str, ast::Expr> {
-//    let t = tuple((number, number))(input).map(|(next_input, res)| {
-//        let (a, b) = res;
-//        (next_input, ast::Expr(a, b))
-//    });
-//}
-
 #[test]
 fn number1() {
     assert!(number("1").is_ok());
     assert!(number("12").is_ok());
     assert!(number("194").is_ok());
     assert!(number("").is_err());
-}
-
-pub fn testo() {
-    println!("XD");
-    println!("{}", number("194 a").unwrap().1);
 }
