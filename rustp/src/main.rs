@@ -14,7 +14,7 @@ fn main() {
     println!("In file {}:", filename);
 
     let contents = fs::read_to_string(filename).expect("Something went wrong reading the file");
-    let t = parser::expr(&contents).expect("Ooops");
+    let t = parser::binding_assignment(&contents).expect("Ooops");
     println!("Left: |{}|", t.0);
     println!("Got: |{}|", t.1);
     //for item in t.1 {

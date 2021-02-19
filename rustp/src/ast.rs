@@ -15,6 +15,54 @@ impl fmt::Display for Clause {
 }
 
 #[derive(PartialEq)]
+pub enum Type {
+    I32,
+}
+
+impl fmt::Display for Type {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Type::I32 => write!(f, "Int32"),
+        }
+    }
+}
+
+#[derive(PartialEq)]
+pub enum Value {
+    I32(i32),
+    Expr(Expr),
+}
+
+impl fmt::Display for Value {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Value::I32(val) => write!(f, "{}", val),
+            Value::Expr(expr) => write!(f, "{}", expr),
+        }
+    }
+}
+
+#[derive(PartialEq)]
+pub enum Binding {
+    // name, type
+    Declaration(Variable, Type),
+    Assignment(Variable, Type, Value),
+}
+
+impl fmt::Display for Binding {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Binding::Declaration(name, t) => write!(f, "(declare-const {} {})", name, t),
+            Binding::Assignment(name, t, val) => write!(
+                f,
+                "(declare-const {} {}); (assert (= {} {}));",
+                name, t, name, val
+            ),
+        }
+    }
+}
+
+#[derive(PartialEq)]
 pub enum Variable {
     Named(String),
 }
