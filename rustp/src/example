@@ -1,1 +1,2 @@
-let a = 34;
+let x = 14;
+//%assert 123

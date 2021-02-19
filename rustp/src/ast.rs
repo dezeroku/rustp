@@ -1,15 +1,14 @@
 use std::fmt;
 
-pub enum Clause {
-    Expr(Expr),
+#[derive(PartialEq)]
+pub enum ProveControl {
     Assert(String),
 }
 
-impl fmt::Display for Clause {
+impl fmt::Display for ProveControl {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Clause::Expr(x) => write!(f, "{}", x),
-            Clause::Assert(x) => write!(f, "{}", x),
+            ProveControl::Assert(x) => write!(f, "(assert {})", x),
         }
     }
 }
@@ -38,6 +37,21 @@ impl fmt::Display for Value {
         match self {
             Value::I32(val) => write!(f, "{}", val),
             Value::Expr(expr) => write!(f, "{}", expr),
+        }
+    }
+}
+
+#[derive(PartialEq)]
+pub enum Command {
+    Binding(Binding),
+    ProveControl(ProveControl),
+}
+
+impl fmt::Display for Command {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Command::Binding(x) => write!(f, "{}", x),
+            Command::ProveControl(x) => write!(f, "{}", x),
         }
     }
 }
@@ -113,7 +127,7 @@ impl fmt::Display for Opcode {
 
 pub struct Function {
     pub name: String,
-    pub content: Vec<Clause>,
+    pub content: Vec<Command>,
 }
 
 impl fmt::Display for Function {
