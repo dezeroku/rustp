@@ -13,5 +13,10 @@ pub fn block(input: &str) -> IResult<&str, Vec<ast::Command>> {
 use nom::{
     branch::alt, bytes::complete::tag, bytes::complete::take_while1, character::complete::char,
     character::complete::multispace0, character::complete::newline, character::complete::space0,
-    combinator::opt, multi::many0, sequence::tuple,
+    character::complete::space1, combinator::opt, multi::many0, sequence::tuple,
 };
+
+pub fn function(input: &str) -> IResult<&str, ast::Function> {
+    // TODO: handle args instead of space1
+    astp::function_unit(input)
+}

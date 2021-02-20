@@ -1,6 +1,6 @@
 use std::fmt;
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum ProveControl {
     Assert(String),
 }
@@ -13,7 +13,7 @@ impl fmt::Display for ProveControl {
     }
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum Type {
     I32,
 }
@@ -26,7 +26,7 @@ impl fmt::Display for Type {
     }
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum Value {
     I32(i32),
     Expr(Expr),
@@ -41,7 +41,7 @@ impl fmt::Display for Value {
     }
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum Command {
     Binding(Binding),
     ProveControl(ProveControl),
@@ -56,7 +56,7 @@ impl fmt::Display for Command {
     }
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum Binding {
     // name, type
     Declaration(Variable, Type),
@@ -76,7 +76,7 @@ impl fmt::Display for Binding {
     }
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum Variable {
     Named(String),
 }
@@ -89,7 +89,7 @@ impl fmt::Display for Variable {
     }
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum Expr {
     Number(i32),
     Variable(Variable),
@@ -106,7 +106,7 @@ impl fmt::Display for Expr {
     }
 }
 
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, Debug)]
 pub enum Opcode {
     Mul,
     Div,
@@ -125,6 +125,7 @@ impl fmt::Display for Opcode {
     }
 }
 
+#[derive(PartialEq, Clone, Debug)]
 pub struct Function {
     pub name: String,
     pub content: Vec<Command>,
@@ -137,6 +138,6 @@ impl fmt::Display for Function {
             temp += &item.to_string();
             temp += "\t";
         }
-        write!(f, "{} {}", self.name, temp)
+        write!(f, "fn {}() {}", self.name, temp)
     }
 }
