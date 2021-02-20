@@ -1,2 +1,5 @@
 let x = 14;
-//%assert 123
+let y = 32;
+let z = x + y;
+let v = z * z - y + x;
+//%assert (= v 2098)

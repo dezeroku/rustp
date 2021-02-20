@@ -1,6 +1,6 @@
 use std::fmt;
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 pub enum ProveControl {
     Assert(String),
 }
@@ -13,7 +13,7 @@ impl fmt::Display for ProveControl {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 pub enum Type {
     I32,
 }
@@ -21,12 +21,12 @@ pub enum Type {
 impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Type::I32 => write!(f, "Int32"),
+            Type::I32 => write!(f, "Int"),
         }
     }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 pub enum Value {
     I32(i32),
     Expr(Expr),
@@ -41,7 +41,7 @@ impl fmt::Display for Value {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 pub enum Command {
     Binding(Binding),
     ProveControl(ProveControl),
@@ -56,7 +56,7 @@ impl fmt::Display for Command {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 pub enum Binding {
     // name, type
     Declaration(Variable, Type),
@@ -76,7 +76,7 @@ impl fmt::Display for Binding {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 pub enum Variable {
     Named(String),
 }
@@ -89,7 +89,7 @@ impl fmt::Display for Variable {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 pub enum Expr {
     Number(i32),
     Variable(Variable),
@@ -106,7 +106,7 @@ impl fmt::Display for Expr {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 pub enum Opcode {
     Mul,
     Div,

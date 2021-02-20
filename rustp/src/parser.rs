@@ -5,12 +5,13 @@ use crate::ast;
 mod astp;
 mod math;
 
-pub fn command(input: &str) -> IResult<&str, ast::Command> {
-    astp::command(input)
+pub fn block(input: &str) -> IResult<&str, Vec<ast::Command>> {
+    astp::block(input)
 }
 
 // testing stuff
 use nom::{
     branch::alt, bytes::complete::tag, bytes::complete::take_while1, character::complete::char,
-    character::complete::newline, character::complete::space0, combinator::opt, sequence::tuple,
+    character::complete::multispace0, character::complete::newline, character::complete::space0,
+    combinator::opt, multi::many0, sequence::tuple,
 };

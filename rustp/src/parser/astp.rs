@@ -3,11 +3,28 @@ use crate::parser::math;
 
 use nom::{
     branch::alt, bytes::complete::tag, bytes::complete::take_while1, character::complete::char,
-    character::complete::newline, character::complete::space0, combinator::opt, sequence::tuple,
-    IResult,
+    character::complete::multispace0, character::complete::newline, character::complete::space0,
+    combinator::opt, multi::many0, sequence::tuple, IResult,
 };
 
-pub fn command(input: &str) -> IResult<&str, ast::Command> {
+pub fn block(input: &str) -> IResult<&str, Vec<ast::Command>> {
+    many0(tuple((multispace0, command, multispace0)))(input).and_then(|(next_input, res)| {
+        let mut result = Vec::new();
+        for i in res {
+            let (_, temp, _) = i;
+            result.push(temp)
+        }
+        Ok((next_input, result))
+    })
+}
+
+#[test]
+fn block1() {
+    assert!(block("let x = 1;").unwrap().0 == "");
+    assert!(block("let x = 1;//%assert 143").unwrap().0 == "");
+}
+
+fn command(input: &str) -> IResult<&str, ast::Command> {
     alt((binding, assert))(input)
 }
 
@@ -32,7 +49,7 @@ fn take_while_not_newline1() {
     assert!(take_while_not_newline("ababab").unwrap().1 == "ababab");
 }
 
-pub fn assert(input: &str) -> IResult<&str, ast::Command> {
+fn assert(input: &str) -> IResult<&str, ast::Command> {
     tuple((
         prove_start,
         tag("assert"),
@@ -80,7 +97,7 @@ fn assert3() {
     assert!(assert("//%assert 143\n").unwrap().0 == "");
 }
 
-pub fn prove_start(input: &str) -> IResult<&str, &str> {
+fn prove_start(input: &str) -> IResult<&str, &str> {
     tag("//%")(input)
 }
 
@@ -112,12 +129,12 @@ fn variable2() {
     assert!(variable("_a_b_c_").unwrap().1 == ast::Variable::Named("_a_b_c_".to_string()));
 }
 
-pub fn binding(input: &str) -> IResult<&str, ast::Command> {
+fn binding(input: &str) -> IResult<&str, ast::Command> {
     // TODO: binding without assignment case
     binding_assignment(input)
 }
 
-pub fn binding_assignment(input: &str) -> IResult<&str, ast::Command> {
+fn binding_assignment(input: &str) -> IResult<&str, ast::Command> {
     tuple((
         space0,
         tag("let "),
