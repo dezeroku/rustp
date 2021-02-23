@@ -176,6 +176,9 @@ fn variable_name(input: &str) -> IResult<&str, &str> {
     take_while1(l)(input).and_then(|(next_input, res)| Ok((next_input, res)))
 }
 
+// TODO:
+// probably this has to be split to r_variable, so function calls also could be used on right
+// sight of the assignment
 pub fn variable(input: &str) -> IResult<&str, ast::Variable> {
     variable_name(input)
         .and_then(|(next_input, res)| Ok((next_input, ast::Variable::Named(res.to_string()))))

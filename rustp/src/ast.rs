@@ -1,6 +1,29 @@
 use std::fmt;
 
 #[derive(PartialEq, Clone, Debug)]
+pub enum Bool {
+    And(Box<Bool>, Box<Bool>),
+    Or(Box<Bool>, Box<Bool>),
+    Not(Box<Bool>),
+    Variable(Variable),
+    True,
+    False,
+}
+
+impl fmt::Display for Bool {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Bool::And(a, b) => write!(f, "AND: {} {}", a, b),
+            Bool::Or(a, b) => write!(f, "OR: {} {}", a, b),
+            Bool::Not(a) => write!(f, "NOT: {}", a),
+            Bool::Variable(a) => write!(f, "VAR: {}", a),
+            Bool::True => write!(f, "true"),
+            Bool::False => write!(f, "false"),
+        }
+    }
+}
+
+#[derive(PartialEq, Clone, Debug)]
 pub enum ProveControl {
     Assert(String),
 }

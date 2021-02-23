@@ -3,6 +3,7 @@ use nom::IResult;
 
 use crate::ast;
 mod astp;
+mod boolean;
 mod math;
 
 pub fn block(input: &str) -> IResult<&str, Vec<ast::Command>> {
