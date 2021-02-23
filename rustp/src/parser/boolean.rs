@@ -2,28 +2,83 @@ use crate::ast;
 use crate::parser::astp;
 
 use nom::{
-    branch::alt, bytes::complete::tag, character::complete::space0, combinator::opt,
+    branch::alt, bytes::complete::tag, character::complete::space0, combinator::opt, multi::many0,
     sequence::tuple, IResult,
 };
 
 // concept: second answer to https://cs.stackexchange.com/questions/10558/grammar-for-describing-boolean-expressions-with-and-or-and-not
+// concept: first answer to https://stackoverflow.com/questions/59508862/using-parser-combinator-to-parse-simple-math-expression
+// addition is basically || and multiplication is &&
 
-fn expr(input: &str) -> IResult<&str, Box<ast::Bool>> {
-    tuple((space0, term, space0, opt(tuple((or, space0, term))), space0))(input).map(
-        |(next_input, res)| {
-            let (_, a, _, t, _) = res;
-            match t {
-                Some((_, _, b)) => (next_input, Box::new(ast::Bool::Or(a, b))),
-                None => (next_input, a),
+fn mult_expr_right(input: &str) -> IResult<&str, Box<ast::Bool>> {
+    tuple((space0, and, space0, factor, space0))(input).and_then(|(next_input, x)| {
+        let (_, _, _, b, _) = x;
+        Ok((next_input, b))
+    })
+}
+
+#[test]
+fn mult_expr_right1() {
+    assert!(mult_expr_right("&& true").unwrap().0 == "");
+}
+
+#[test]
+fn mult_expr_right2() {
+    assert!(mult_expr_right(" && true").unwrap().0 == "");
+}
+
+fn mult_expr(input: &str) -> IResult<&str, Box<ast::Bool>> {
+    space0(input)
+        .and_then(|(next_input, _)| factor(next_input))
+        .and_then(|(next_input, a)| {
+            let f = many0(mult_expr_right)(next_input);
+            match f {
+                Ok(x) => {
+                    let (next_input, vect) = x;
+                    let mut temp = a;
+                    for item in vect {
+                        let b = item;
+                        temp = Box::new(ast::Bool::And(temp, b));
+                    }
+                    Ok((next_input, temp))
+                }
+                Err(_) => Ok((next_input, a)),
             }
-        },
-    )
+        })
+}
+
+fn add_expr_right(input: &str) -> IResult<&str, Box<ast::Bool>> {
+    tuple((space0, or, space0, mult_expr, space0))(input).and_then(|(next_input, x)| {
+        let (_, _, _, b, _) = x;
+        Ok((next_input, b))
+    })
+}
+
+pub fn expr(input: &str) -> IResult<&str, Box<ast::Bool>> {
+    space0(input)
+        .and_then(|(next_input, _)| mult_expr(next_input))
+        .and_then(|(next_input, a)| {
+            let f = many0(add_expr_right)(next_input);
+            match f {
+                Ok(x) => {
+                    let (next_input, vect) = x;
+                    let mut temp = a;
+                    for item in vect {
+                        let b = item;
+                        temp = Box::new(ast::Bool::Or(temp, b));
+                    }
+                    Ok((next_input, temp))
+                }
+                Err(_) => Ok((next_input, a)),
+            }
+        })
 }
 
 #[test]
 fn expr1() {
     assert!(expr("true").is_ok());
     assert!(expr("true || false").is_ok());
+    assert!(expr("true || false || true").unwrap().0 == "");
     assert!(
         expr("false || true").unwrap().1
             == Box::new(ast::Bool::Or(
@@ -35,38 +90,7 @@ fn expr1() {
 
 #[test]
 fn expr2() {
-    println!("{:?}", expr("!false && (a && b) || (!c) && true"));
     assert!(expr("!false && (a && b) || (!c) && true").unwrap().0 == "");
-}
-
-fn term(input: &str) -> IResult<&str, Box<ast::Bool>> {
-    tuple((
-        space0,
-        factor,
-        space0,
-        opt(tuple((and, space0, factor))),
-        space0,
-    ))(input)
-    .map(|(next_input, res)| {
-        let (_, a, _, t, _) = res;
-        match t {
-            Some((_, _, b)) => (next_input, Box::new(ast::Bool::And(a, b))),
-            None => (next_input, a),
-        }
-    })
-}
-
-#[test]
-fn term1() {
-    assert!(term("true && false").is_ok());
-    assert!(term("true").is_ok());
-    assert!(
-        term("false && true").unwrap().1
-            == Box::new(ast::Bool::And(
-                Box::new(ast::Bool::False),
-                Box::new(ast::Bool::True)
-            ))
-    );
 }
 
 fn factor(input: &str) -> IResult<&str, Box<ast::Bool>> {
@@ -101,7 +125,7 @@ fn factor_not_1() {
 }
 
 fn factor_paren(input: &str) -> IResult<&str, Box<ast::Bool>> {
-    tuple((space0, tag("("), space0, factor, space0, tag(")"), space0))(input).map(
+    tuple((space0, tag("("), space0, expr, space0, tag(")"), space0))(input).map(
         |(next_input, res)| {
             let (_, _, _, a, _, _, _) = res;
             (next_input, a)
@@ -123,7 +147,7 @@ fn factor_paren_1() {
 }
 
 fn _true(input: &str) -> IResult<&str, Box<ast::Bool>> {
-    tag("true")(input).and_then(|(next_input, res)| Ok((next_input, Box::new(ast::Bool::True))))
+    tag("true")(input).and_then(|(next_input, _)| Ok((next_input, Box::new(ast::Bool::True))))
 }
 
 #[test]
@@ -133,7 +157,7 @@ fn _true1() {
 }
 
 fn _false(input: &str) -> IResult<&str, Box<ast::Bool>> {
-    tag("false")(input).and_then(|(next_input, res)| Ok((next_input, Box::new(ast::Bool::False))))
+    tag("false")(input).and_then(|(next_input, _)| Ok((next_input, Box::new(ast::Bool::False))))
 }
 
 #[test]
