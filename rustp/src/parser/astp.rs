@@ -30,6 +30,8 @@ pub fn function_unit(input: &str) -> IResult<&str, ast::Function> {
             ast::Function {
                 name: name.to_string(),
                 content: comms,
+                input: Vec::new(),
+                output: ast::Type::Unit,
             },
         ))
     })
@@ -59,6 +61,8 @@ fn function_unit1() {
     let b = ast::Function {
         name: "a".to_string(),
         content: content,
+        input: Vec::new(),
+        output: ast::Type::Unit,
     };
 
     assert!(a == b);

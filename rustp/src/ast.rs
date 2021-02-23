@@ -38,13 +38,30 @@ impl fmt::Display for ProveControl {
 
 #[derive(PartialEq, Clone, Debug)]
 pub enum Type {
+    Bool,
     I32,
+    Tuple(Box<Type>),
+    Vector(Box<Type>),
+    // How to handle pointer type?
+    Pointer(Box<Type>),
+    // type of the array and its length
+    Array(Box<Type>, i32),
+    Unit,
+    // placeholder to be used when parsing expressions with nothing on the right side (infer is needed)
+    Unknown,
 }
 
 impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Type::I32 => write!(f, "Int"),
+            Type::Bool => write!(f, "Bool"),
+            Type::Tuple(a) => write!(f, "Tuple({})", a),
+            Type::Vector(a) => write!(f, "Vector({})", a),
+            Type::Pointer(a) => write!(f, "Pointer({})", a),
+            Type::Array(a, l) => write!(f, "Array({}, {})", a, l),
+            Type::Unit => write!(f, "Unit"),
+            Type::Unknown => write!(f, "Unknown"),
         }
     }
 }
@@ -102,12 +119,19 @@ impl fmt::Display for Binding {
 #[derive(PartialEq, Clone, Debug)]
 pub enum Variable {
     Named(String),
+    Value(Box<Value>),
+    // function name, arguments, output type
+    FunctionCall(String, Vec<Variable>, Type),
 }
 
 impl fmt::Display for Variable {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Variable::Named(x) => write!(f, "{}", x),
+            Variable::Named(x) => write!(f, "Named({})", x),
+            Variable::Value(x) => write!(f, "Value({})", x),
+            Variable::FunctionCall(name, input, t) => {
+                write!(f, "FunctionCall({}, {:?}, {})", name, input, t)
+            }
         }
     }
 }
@@ -148,10 +172,35 @@ impl fmt::Display for Opcode {
     }
 }
 
+pub enum Block {
+    // vector of conditions for if/elif, vector of vectors of commands for if/elif, vector of commands for else
+    If(Vec<Bool>, Vec<Vec<Command>>, Vec<Command>),
+    // TODO: Handle the for case somehow
+}
+
+impl fmt::Display for Block {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Block::If(conds, comms, el) => {
+                let mut temp = String::new();
+                for i in conds.iter().zip(comms.iter()) {
+                    let (cond, comm) = i;
+                    temp += &format!("if ({}) ({:?}) el", cond, comm).to_owned();
+                }
+                temp += &format!("se ({:?})", el).to_owned();
+                write!(f, "{}", temp)
+            }
+        }
+    }
+}
+
 #[derive(PartialEq, Clone, Debug)]
 pub struct Function {
     pub name: String,
     pub content: Vec<Command>,
+    pub input: Vec<Type>,
+    // single type, as returning multiple values requires tuple anyway
+    pub output: Type,
 }
 
 impl fmt::Display for Function {
@@ -161,6 +210,15 @@ impl fmt::Display for Function {
             temp += &item.to_string();
             temp += "\t";
         }
-        write!(f, "fn {}() {}", self.name, temp)
+        let mut input: String = "".to_owned();
+        for item in self.input.iter() {
+            temp += &item.to_string();
+            temp += "\t";
+        }
+        write!(
+            f,
+            "fn {}({}) -> {} () {}",
+            self.name, input, self.output, temp
+        )
     }
 }

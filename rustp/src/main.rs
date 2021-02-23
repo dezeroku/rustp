@@ -20,6 +20,16 @@ fn main() {
     // OR
     println!("Got: |{:?}|", t.1);
 
+    let mut t = Vec::new();
+    t.push(ast::Bool::True);
+    t.push(ast::Bool::False);
+    t.push(ast::Bool::True);
+
+    let mut c = Vec::new();
+    c.push(Vec::new());
+    c.push(Vec::new());
+    c.push(Vec::new());
+    println!("{}", ast::Block::If(t, c, Vec::new()));
     // OR
     //let copy = t.1.clone();
     //for item in t.1 {
