@@ -21,7 +21,7 @@ RUN cargo build --release && \
 ADD ./src/ ./src/
 RUN cargo build --release
 
-FROM ubuntu:20.04 as temp
+FROM ubuntu:20.04 as final
 COPY --from=z3 /z3_built/bin /usr/bin
 COPY --from=z3 /z3_built/lib /usr/lib
 COPY --from=z3 /z3_built/include /usr/include
