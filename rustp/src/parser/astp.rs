@@ -1,4 +1,5 @@
 use crate::ast;
+use crate::parser::boolean;
 use crate::parser::math;
 
 use nom::{
@@ -6,6 +7,37 @@ use nom::{
     character::complete::multispace0, character::complete::newline, character::complete::space0,
     character::complete::space1, combinator::opt, multi::many0, sequence::tuple, IResult,
 };
+
+// TODO: handle input and output params correctly
+pub fn function(input: &str) -> IResult<&str, ast::Function> {
+    tuple((
+        tag("fn"),
+        space1,
+        function_name,
+        space1,
+        tag("("),
+        space0,
+        tag(")"),
+        space0,
+        tag("{"),
+        space0,
+        block,
+        space0,
+        tag("}"),
+    ))(input)
+    .and_then(|(next_input, res)| {
+        let (_, _, name, _, _, _, _, _, _, _, comms, _, _) = res;
+        Ok((
+            next_input,
+            ast::Function {
+                name: name.to_string(),
+                content: comms,
+                input: Vec::new(),
+                output: ast::Type::Unit,
+            },
+        ))
+    })
+}
 
 pub fn function_unit(input: &str) -> IResult<&str, ast::Function> {
     tuple((
@@ -56,7 +88,7 @@ fn function_unit1() {
         ast::Type::I32,
         ast::Value::Expr(ast::Expr::Number(14)),
     )));
-    let a = function_unit("fn a () {let a = 14;}").unwrap().1;
+    let a = function_unit("fn a () {let a: i32 = 14;}").unwrap().1;
 
     let b = ast::Function {
         name: "a".to_string(),
@@ -205,7 +237,15 @@ fn variable2() {
 
 fn binding(input: &str) -> IResult<&str, ast::Command> {
     // TODO: binding without assignment case
-    binding_assignment(input)
+    alt((binding_assignment, binding_declaration))(input)
+}
+
+fn value(input: &str) -> IResult<&str, ast::Value> {
+    boolean::expr(input)
+        .and_then(|(next_input, res)| Ok((next_input, ast::Value::Bool(*res))))
+        .or_else(|_| {
+            math::expr(input).and_then(|(next_input, res)| Ok((next_input, ast::Value::Expr(*res))))
+        })
 }
 
 fn binding_assignment(input: &str) -> IResult<&str, ast::Command> {
@@ -215,38 +255,125 @@ fn binding_assignment(input: &str) -> IResult<&str, ast::Command> {
         space0,
         variable,
         space0,
+        opt(tuple((char(':'), space0, type_def, space0))),
         char('='),
         space0,
-        math::expr,
+        value,
         space0,
         char(';'),
     ))(input)
     .and_then(|(next_input, x)| {
-        // TODO: type
-        let (_, _, _, v, _, _, _, exp, _, _) = x;
-        Ok((
-            next_input,
-            ast::Command::Binding(ast::Binding::Assignment(
-                v,
-                ast::Type::I32,
-                ast::Value::Expr(*exp),
+        let (_, _, _, v, _, t, _, _, exp, _, _) = x;
+        match t {
+            Some((_, _, t, _)) => Ok((
+                next_input,
+                ast::Command::Binding(ast::Binding::Assignment(v, t, exp)),
             )),
-        ))
+            None => Ok((
+                next_input,
+                ast::Command::Binding(ast::Binding::Assignment(v, ast::Type::Unknown, exp)),
+            )),
+        }
     })
 }
 
 #[test]
 fn binding_assignment1() {
-    assert!(binding_assignment("let x = 12;").unwrap().0 == "");
+    assert!(binding_assignment("let x: i32 = 12;").unwrap().0 == "");
     assert!(binding_assignment("let x = 12 * 4;").unwrap().0 == "");
     assert!(binding_assignment("let y = 12 - 5 * 6;").unwrap().0 == "");
     assert!(binding_assignment("let z = 3").is_err());
     assert!(
-        binding_assignment("let z = 3;").unwrap().1
+        binding_assignment("let z: i32 = 3;").unwrap().1
             == ast::Command::Binding(ast::Binding::Assignment(
                 ast::Variable::Named("z".to_string()),
                 ast::Type::I32,
                 ast::Value::Expr(ast::Expr::Number(3))
             ))
     );
+    // This one will be validated later on?
+    // Or can we just assume that the code we are getting is correct Rust?
+    // TODO: run check with rustc before even starting to parse AST on our side.
+    assert!(
+        binding_assignment("let z: bool = 3;").unwrap().1
+            == ast::Command::Binding(ast::Binding::Assignment(
+                ast::Variable::Named("z".to_string()),
+                ast::Type::Bool,
+                ast::Value::Expr(ast::Expr::Number(3))
+            ))
+    );
+    assert!(
+        binding_assignment("let z: bool = true;").unwrap().1
+            == ast::Command::Binding(ast::Binding::Assignment(
+                ast::Variable::Named("z".to_string()),
+                ast::Type::Bool,
+                ast::Value::Bool(ast::Bool::True)
+            ))
+    );
+}
+
+fn binding_declaration(input: &str) -> IResult<&str, ast::Command> {
+    tuple((
+        space0,
+        tag("let "),
+        space0,
+        variable,
+        space0,
+        opt(tuple((char(':'), space0, type_def, space0))),
+        space0,
+        char(';'),
+    ))(input)
+    .and_then(|(next_input, x)| {
+        let (_, _, _, v, _, t, _, _) = x;
+        match t {
+            Some((_, _, t, _)) => Ok((
+                next_input,
+                ast::Command::Binding(ast::Binding::Declaration(v, t)),
+            )),
+            None => Ok((
+                next_input,
+                ast::Command::Binding(ast::Binding::Declaration(v, ast::Type::Unknown)),
+            )),
+        }
+    })
+}
+
+#[test]
+fn binding_declaration1() {
+    assert!(binding_declaration("let x: i32;").unwrap().0 == "");
+    assert!(binding_declaration("let x;").unwrap().0 == "");
+    assert!(binding_declaration("let y: bool;").unwrap().0 == "");
+    assert!(
+        binding_declaration("let z:i32;").unwrap().1
+            == ast::Command::Binding(ast::Binding::Declaration(
+                ast::Variable::Named("z".to_string()),
+                ast::Type::I32
+            ))
+    );
+    assert!(
+        binding_declaration("let z:bool;").unwrap().1
+            == ast::Command::Binding(ast::Binding::Declaration(
+                ast::Variable::Named("z".to_string()),
+                ast::Type::Bool
+            ))
+    );
+    assert!(
+        binding_declaration("let x;").unwrap().1
+            == ast::Command::Binding(ast::Binding::Declaration(
+                ast::Variable::Named("x".to_string()),
+                ast::Type::Unknown
+            ))
+    );
+}
+
+fn type_def(input: &str) -> IResult<&str, ast::Type> {
+    alt((type_def_bool, type_def_i32))(input)
+}
+
+fn type_def_bool(input: &str) -> IResult<&str, ast::Type> {
+    tag("bool")(input).and_then(|(next_input, _)| Ok((next_input, ast::Type::Bool)))
+}
+
+fn type_def_i32(input: &str) -> IResult<&str, ast::Type> {
+    tag("i32")(input).and_then(|(next_input, _)| Ok((next_input, ast::Type::I32)))
 }

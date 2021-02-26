@@ -68,15 +68,15 @@ impl fmt::Display for Type {
 
 #[derive(PartialEq, Clone, Debug)]
 pub enum Value {
-    I32(i32),
     Expr(Expr),
+    Bool(Bool),
 }
 
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Value::I32(val) => write!(f, "{}", val),
             Value::Expr(expr) => write!(f, "{}", expr),
+            Value::Bool(val) => write!(f, "{}", val),
         }
     }
 }
@@ -175,7 +175,9 @@ impl fmt::Display for Opcode {
 pub enum Block {
     // vector of conditions for if/elif, vector of vectors of commands for if/elif, vector of commands for else
     If(Vec<Bool>, Vec<Vec<Command>>, Vec<Command>),
-    // TODO: Handle the for case somehow
+    // iterator's name, first range elem, second range elem, commands
+    ForRange(Variable, Variable, Variable, Vec<Command>),
+    // TODO: Handle vector iterator somehow?
 }
 
 impl fmt::Display for Block {
@@ -189,6 +191,14 @@ impl fmt::Display for Block {
                 }
                 temp += &format!("se ({:?})", el).to_owned();
                 write!(f, "{}", temp)
+            }
+            Block::ForRange(i, a, b, comms) => {
+                let mut temp = String::new();
+                for i in comms.iter() {
+                    temp += &format!("{:?}", i).to_owned();
+                }
+
+                write!(f, "for {} in range {}..{} ({})", i, a, b, temp)
             }
         }
     }
@@ -212,7 +222,7 @@ impl fmt::Display for Function {
         }
         let mut input: String = "".to_owned();
         for item in self.input.iter() {
-            temp += &item.to_string();
+            temp += &input.to_string();
             temp += "\t";
         }
         write!(
