@@ -8,6 +8,69 @@ use nom::{
     character::complete::space1, combinator::opt, multi::many0, sequence::tuple, IResult,
 };
 
+fn function_input(input: &str) -> IResult<&str, ast::Binding> {
+    tuple((
+        space0,
+        variable,
+        space0,
+        char(':'),
+        space0,
+        type_def,
+        space0,
+    ))(input)
+    .and_then(|(next_input, res)| {
+        let (_, v, _, _, _, t, _) = res;
+        Ok((next_input, ast::Binding::Declaration(v, t)))
+    })
+}
+
+#[test]
+fn function_input1() {
+    assert!(
+        function_input("a: i32").unwrap().1
+            == ast::Binding::Declaration(ast::Variable::Named("a".to_string()), ast::Type::I32)
+    );
+}
+
+fn function_inputs(input: &str) -> IResult<&str, Vec<ast::Binding>> {
+    function_input(input)
+        .and_then(|(next_input, res)| {
+            let f = many0(tuple((char(','), function_input)))(next_input);
+            let (next_input, rest) = match f {
+                Ok((next_input, next)) => (next_input, next),
+                Err(_) => (next_input, Vec::new()),
+            };
+            let mut content = Vec::new();
+            content.push(res);
+
+            for item in rest {
+                let (_, i) = item;
+                content.push(i);
+            }
+
+            Ok((next_input, content))
+        })
+        .or_else(|_| Ok((input, Vec::new())))
+}
+
+#[test]
+fn function_inputs1() {
+    let mut t = Vec::new();
+    t.push(ast::Binding::Declaration(
+        ast::Variable::Named("a".to_string()),
+        ast::Type::I32,
+    ));
+    t.push(ast::Binding::Declaration(
+        ast::Variable::Named("b".to_string()),
+        ast::Type::I32,
+    ));
+    t.push(ast::Binding::Declaration(
+        ast::Variable::Named("c".to_string()),
+        ast::Type::Bool,
+    ));
+    assert!(function_inputs("a: i32, b: i32, c: bool").unwrap().1 == t);
+}
+
 // TODO: handle input and output params correctly
 pub fn function(input: &str) -> IResult<&str, ast::Function> {
     tuple((
@@ -17,35 +80,7 @@ pub fn function(input: &str) -> IResult<&str, ast::Function> {
         space1,
         tag("("),
         space0,
-        tag(")"),
-        space0,
-        tag("{"),
-        space0,
-        block,
-        space0,
-        tag("}"),
-    ))(input)
-    .and_then(|(next_input, res)| {
-        let (_, _, name, _, _, _, _, _, _, _, comms, _, _) = res;
-        Ok((
-            next_input,
-            ast::Function {
-                name: name.to_string(),
-                content: comms,
-                input: Vec::new(),
-                output: ast::Type::Unit,
-            },
-        ))
-    })
-}
-
-pub fn function_unit(input: &str) -> IResult<&str, ast::Function> {
-    tuple((
-        tag("fn"),
-        space1,
-        function_name,
-        space1,
-        tag("("),
+        function_inputs,
         space0,
         tag(")"),
         space0,
@@ -56,13 +91,13 @@ pub fn function_unit(input: &str) -> IResult<&str, ast::Function> {
         tag("}"),
     ))(input)
     .and_then(|(next_input, res)| {
-        let (_, _, name, _, _, _, _, _, _, _, comms, _, _) = res;
+        let (_, _, name, _, _, _, inputs, _, _, _, _, _, comms, _, _) = res;
         Ok((
             next_input,
             ast::Function {
                 name: name.to_string(),
                 content: comms,
-                input: Vec::new(),
+                input: inputs,
                 output: ast::Type::Unit,
             },
         ))
@@ -71,24 +106,19 @@ pub fn function_unit(input: &str) -> IResult<&str, ast::Function> {
 
 #[test]
 fn function_unit1() {
-    assert!(function_unit("fn a () {}").unwrap().0 == "");
-    assert!(function_unit("fn a ( ) {}").unwrap().0 == "");
-    assert!(function_unit("fn a ( ) { }").unwrap().0 == "");
-    assert!(function_unit("fn  a  ( ) { }").unwrap().0 == "");
-    assert!(function_unit("fn a () {let a = 14;}").unwrap().0 == "");
-    assert!(
-        function_unit("fn a () {let a = 14; let c = 1 + b;}")
-            .unwrap()
-            .0
-            == ""
-    );
+    assert!(function("fn a () {}").unwrap().0 == "");
+    assert!(function("fn a ( ) {}").unwrap().0 == "");
+    assert!(function("fn a ( ) { }").unwrap().0 == "");
+    assert!(function("fn  a  ( ) { }").unwrap().0 == "");
+    assert!(function("fn a () {let a = 14;}").unwrap().0 == "");
+    assert!(function("fn a () {let a = 14; let c = 1 + b;}").unwrap().0 == "");
     let mut content = Vec::new();
     content.push(ast::Command::Binding(ast::Binding::Assignment(
         ast::Variable::Named("a".to_string()),
         ast::Type::I32,
         ast::Value::Expr(ast::Expr::Number(14)),
     )));
-    let a = function_unit("fn a () {let a: i32 = 14;}").unwrap().1;
+    let a = function("fn a () {let a: i32 = 14;}").unwrap().1;
 
     let b = ast::Function {
         name: "a".to_string(),

@@ -1,4 +1,4 @@
-fn a () {
+fn a (b: i32, c:bool, a: i32 ) {
 let a: i32 = 14;
 let b: bool;
 }

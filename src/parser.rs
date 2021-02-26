@@ -18,6 +18,5 @@ use nom::{
 };
 
 pub fn function(input: &str) -> IResult<&str, ast::Function> {
-    // TODO: handle args instead of space1
-    astp::function_unit(input)
+    astp::function(input)
 }

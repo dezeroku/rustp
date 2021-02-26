@@ -208,7 +208,7 @@ impl fmt::Display for Block {
 pub struct Function {
     pub name: String,
     pub content: Vec<Command>,
-    pub input: Vec<Type>,
+    pub input: Vec<Binding>,
     // single type, as returning multiple values requires tuple anyway
     pub output: Type,
 }
