@@ -71,7 +71,6 @@ fn function_inputs1() {
     assert!(function_inputs("a: i32, b: i32, c: bool").unwrap().1 == t);
 }
 
-// TODO: handle input and output params correctly
 pub fn function(input: &str) -> IResult<&str, ast::Function> {
     tuple((
         tag("fn"),
@@ -84,6 +83,8 @@ pub fn function(input: &str) -> IResult<&str, ast::Function> {
         space0,
         tag(")"),
         space0,
+        opt(tuple((tag("->"), space0, type_def))),
+        space0,
         tag("{"),
         space0,
         block,
@@ -91,21 +92,25 @@ pub fn function(input: &str) -> IResult<&str, ast::Function> {
         tag("}"),
     ))(input)
     .and_then(|(next_input, res)| {
-        let (_, _, name, _, _, _, inputs, _, _, _, _, _, comms, _, _) = res;
+        let (_, _, name, _, _, _, inputs, _, _, _, out, _, _, _, comms, _, _) = res;
+        let o = match out {
+            Some((_, _, a)) => a,
+            None => ast::Type::Unit,
+        };
         Ok((
             next_input,
             ast::Function {
                 name: name.to_string(),
                 content: comms,
                 input: inputs,
-                output: ast::Type::Unit,
+                output: o,
             },
         ))
     })
 }
 
 #[test]
-fn function_unit1() {
+fn function1() {
     assert!(function("fn a () {}").unwrap().0 == "");
     assert!(function("fn a ( ) {}").unwrap().0 == "");
     assert!(function("fn a ( ) { }").unwrap().0 == "");
@@ -125,6 +130,42 @@ fn function_unit1() {
         content: content,
         input: Vec::new(),
         output: ast::Type::Unit,
+    };
+
+    assert!(a == b);
+}
+
+#[test]
+fn function2() {
+    assert!(function("fn a (a: i32) {}").unwrap().0 == "");
+    assert!(function("fn a (b: bool, a:i32 ) {}").unwrap().0 == "");
+    assert!(function("fn a ( ) -> i32{ }").unwrap().0 == "");
+    assert!(function("fn  a  (b: bool ) -> bool{ }").unwrap().0 == "");
+    let mut content = Vec::new();
+    content.push(ast::Command::Binding(ast::Binding::Assignment(
+        ast::Variable::Named("a".to_string()),
+        ast::Type::I32,
+        ast::Value::Expr(ast::Expr::Number(14)),
+    )));
+
+    let mut input = Vec::new();
+    input.push(ast::Binding::Declaration(
+        ast::Variable::Named("c".to_string()),
+        ast::Type::I32,
+    ));
+    input.push(ast::Binding::Declaration(
+        ast::Variable::Named("d".to_string()),
+        ast::Type::Bool,
+    ));
+    let a = function("fn a (c: i32, d: bool) -> bool {let a: i32 = 14;}")
+        .unwrap()
+        .1;
+
+    let b = ast::Function {
+        name: "a".to_string(),
+        content: content,
+        input: input,
+        output: ast::Type::Bool,
     };
 
     assert!(a == b);
@@ -266,7 +307,6 @@ fn variable2() {
 }
 
 fn binding(input: &str) -> IResult<&str, ast::Command> {
-    // TODO: binding without assignment case
     alt((binding_assignment, binding_declaration))(input)
 }
 
@@ -397,6 +437,7 @@ fn binding_declaration1() {
 }
 
 fn type_def(input: &str) -> IResult<&str, ast::Type> {
+    // TODO: handle vector, tuple, etc.
     alt((type_def_bool, type_def_i32))(input)
 }
 
