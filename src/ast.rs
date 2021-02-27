@@ -54,10 +54,10 @@ pub enum Type {
     Vector(Box<Type>),
     // How to handle pointer type?
     Pointer(Box<Type>),
-    // type of the array and its length
+    /// type of the array and its length
     Array(Box<Type>, i32),
     Unit,
-    // placeholder to be used when parsing expressions with nothing on the right side (infer is needed)
+    /// placeholder to be used when parsing expressions with nothing on the right side (infer is needed)
     Unknown,
 }
 
@@ -169,6 +169,7 @@ pub enum Opcode {
     Div,
     Add,
     Sub,
+    /// The % in rust is actually remainder, not modulo
     Mod,
 }
 
@@ -179,16 +180,15 @@ impl fmt::Display for Opcode {
             Opcode::Div => write!(f, "/"),
             Opcode::Add => write!(f, "+"),
             Opcode::Sub => write!(f, "-"),
-            // The % in rust is actually remainder, not modulo
             Opcode::Mod => write!(f, "%"),
         }
     }
 }
 
 pub enum Block {
-    // vector of conditions for if/elif, vector of vectors of commands for if/elif, vector of commands for else
+    /// vector of conditions for if/elif, vector of vectors of commands for if/elif, vector of commands for else
     If(Vec<Bool>, Vec<Vec<Command>>, Vec<Command>),
-    // iterator's name, first range elem, second range elem, commands
+    /// iterator's name, first range elem, second range elem, commands
     ForRange(Variable, Variable, Variable, Vec<Command>),
     // TODO: Handle vector iterator somehow?
 }
@@ -222,10 +222,11 @@ pub struct Function {
     pub name: String,
     pub content: Vec<Command>,
     pub input: Vec<Binding>,
-    // single type, as returning multiple values requires tuple anyway
+    /// single type, as returning multiple values requires tuple anyway
     pub output: Type,
-    // default value for these is just true
+    /// default value is just true
     pub precondition: Bool,
+    /// default value is just true
     pub postcondition: Bool,
 }
 
