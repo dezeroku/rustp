@@ -169,6 +169,7 @@ pub enum Opcode {
     Div,
     Add,
     Sub,
+    Mod,
 }
 
 impl fmt::Display for Opcode {
@@ -178,6 +179,8 @@ impl fmt::Display for Opcode {
             Opcode::Div => write!(f, "/"),
             Opcode::Add => write!(f, "+"),
             Opcode::Sub => write!(f, "-"),
+            // The % in rust is actually remainder, not modulo
+            Opcode::Mod => write!(f, "%"),
         }
     }
 }

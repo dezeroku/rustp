@@ -52,7 +52,7 @@ fn primary_expr(input: &str) -> IResult<&str, Box<ast::Expr>> {
 }
 
 fn mult_expr_right(input: &str) -> IResult<&str, (ast::Opcode, Box<ast::Expr>)> {
-    tuple((space0, mult_or_divide, space0, primary_expr, space0))(input).and_then(
+    tuple((space0, mult_or_divide_or_mod, space0, primary_expr, space0))(input).and_then(
         |(next_input, x)| {
             let (_, op, _, b, _) = x;
             Ok((next_input, (op, b)))
@@ -124,8 +124,8 @@ fn expr_variable(input: &str) -> IResult<&str, Box<ast::Expr>> {
         .and_then(|(next_input, res)| Ok((next_input, Box::new(ast::Expr::Variable(res)))))
 }
 
-fn mult_or_divide(input: &str) -> IResult<&str, ast::Opcode> {
-    let t = one_of("*/")(input);
+fn mult_or_divide_or_mod(input: &str) -> IResult<&str, ast::Opcode> {
+    let t = one_of("*/%")(input);
     match t {
         Ok(a) => {
             let (next_input, res) = a;
@@ -134,6 +134,7 @@ fn mult_or_divide(input: &str) -> IResult<&str, ast::Opcode> {
                 match res {
                     '*' => ast::Opcode::Mul,
                     '/' => ast::Opcode::Div,
+                    '%' => ast::Opcode::Mod,
                     _ => unimplemented!(),
                 },
             ))
@@ -271,6 +272,15 @@ fn expr2() {
                 Box::new(ast::Expr::Number(3))
             ))
     );
+
+    assert!(
+        *expr("12 % 3").unwrap().1
+            == *Box::new(ast::Expr::Op(
+                Box::new(ast::Expr::Number(12)),
+                ast::Opcode::Mod,
+                Box::new(ast::Expr::Number(3))
+            ))
+    );
 }
 
 #[test]
@@ -297,10 +307,11 @@ fn expr_number1() {
 }
 
 #[test]
-fn mult_or_divide1() {
-    assert!(mult_or_divide("*").is_ok());
-    assert!(mult_or_divide("/").is_ok());
-    assert!(mult_or_divide("+").is_err());
+fn mult_or_divide_or_mod1() {
+    assert!(mult_or_divide_or_mod("*").is_ok());
+    assert!(mult_or_divide_or_mod("/").is_ok());
+    assert!(mult_or_divide_or_mod("%").is_ok());
+    assert!(mult_or_divide_or_mod("+").is_err());
 }
 
 #[test]

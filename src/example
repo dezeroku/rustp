@@ -1,4 +1,4 @@
-//%precondition b + 4 == 2
+//%precondition b % 4 == 2
 //%postcondition c - 2 == 1
 fn a (b: i32, c:bool, a: i32 ) -> bool {
 let a: i32 = 14;
