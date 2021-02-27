@@ -12,6 +12,7 @@ use nom::{
 fn function_input(input: &str) -> IResult<&str, ast::Binding> {
     tuple((
         space0,
+        opt(tuple((tag("mut"), space1))),
         variable,
         space0,
         char(':'),
@@ -20,8 +21,12 @@ fn function_input(input: &str) -> IResult<&str, ast::Binding> {
         space0,
     ))(input)
     .and_then(|(next_input, res)| {
-        let (_, v, _, _, _, t, _) = res;
-        Ok((next_input, ast::Binding::Declaration(v, t)))
+        let (_, m, v, _, _, _, t, _) = res;
+        let mu = match m {
+            Some(_) => true,
+            None => false,
+        };
+        Ok((next_input, ast::Binding::Declaration(v, t, mu)))
     })
 }
 
@@ -29,7 +34,11 @@ fn function_input(input: &str) -> IResult<&str, ast::Binding> {
 fn function_input1() {
     assert!(
         function_input("a: i32").unwrap().1
-            == ast::Binding::Declaration(ast::Variable::Named("a".to_string()), ast::Type::I32)
+            == ast::Binding::Declaration(
+                ast::Variable::Named("a".to_string()),
+                ast::Type::I32,
+                false
+            )
     );
 }
 
@@ -60,16 +69,19 @@ fn function_inputs1() {
     t.push(ast::Binding::Declaration(
         ast::Variable::Named("a".to_string()),
         ast::Type::I32,
+        false,
     ));
     t.push(ast::Binding::Declaration(
         ast::Variable::Named("b".to_string()),
         ast::Type::I32,
+        false,
     ));
     t.push(ast::Binding::Declaration(
         ast::Variable::Named("c".to_string()),
         ast::Type::Bool,
+        true,
     ));
-    assert!(function_inputs("a: i32, b: i32, c: bool").unwrap().1 == t);
+    assert!(function_inputs("a: i32, b: i32, mut c: bool").unwrap().1 == t);
 }
 
 pub fn precondition(input: &str) -> IResult<&str, ast::Bool> {
@@ -202,6 +214,7 @@ fn function1() {
         ast::Variable::Named("a".to_string()),
         ast::Type::I32,
         ast::Value::Expr(ast::Expr::Number(14)),
+        false,
     )));
     let a = function("fn a () {let a: i32 = 14;}").unwrap().1;
 
@@ -228,16 +241,19 @@ fn function2() {
         ast::Variable::Named("a".to_string()),
         ast::Type::I32,
         ast::Value::Expr(ast::Expr::Number(14)),
+        false,
     )));
 
     let mut input = Vec::new();
     input.push(ast::Binding::Declaration(
         ast::Variable::Named("c".to_string()),
         ast::Type::I32,
+        false,
     ));
     input.push(ast::Binding::Declaration(
         ast::Variable::Named("d".to_string()),
         ast::Type::Bool,
+        false,
     ));
     let a = function("fn a (c: i32, d: bool) -> bool {let a: i32 = 14;}")
         .unwrap()
@@ -262,16 +278,19 @@ fn function3() {
         ast::Variable::Named("a".to_string()),
         ast::Type::I32,
         ast::Value::Expr(ast::Expr::Number(14)),
+        false,
     )));
 
     let mut input = Vec::new();
     input.push(ast::Binding::Declaration(
         ast::Variable::Named("c".to_string()),
         ast::Type::I32,
+        false,
     ));
     input.push(ast::Binding::Declaration(
         ast::Variable::Named("d".to_string()),
         ast::Type::Bool,
+        false,
     ));
     let a = function("//%precondition false && false\n//%postcondition (a == 12) && false\n fn a (c: i32, d: bool) -> bool {let a: i32 = 14;}")
         .unwrap()
@@ -486,11 +505,13 @@ fn if_else3() {
         ast::Variable::Named("b".to_string()),
         ast::Type::Unknown,
         ast::Value::Expr(ast::Expr::Number(3)),
+        false,
     )));
     comms_2.push(ast::Command::Binding(ast::Binding::Assignment(
         ast::Variable::Named("b".to_string()),
         ast::Type::Unknown,
         ast::Value::Expr(ast::Expr::Number(4)),
+        false,
     )));
 
     comms.push(comms_1);
@@ -500,6 +521,7 @@ fn if_else3() {
         ast::Variable::Named("b".to_string()),
         ast::Type::Unknown,
         ast::Value::Expr(ast::Expr::Number(1)),
+        false,
     )));
 
     let b = ast::Command::Block(ast::Block::If(conds, comms, el));
@@ -683,8 +705,9 @@ fn value_expr(input: &str) -> IResult<&str, ast::Value> {
 fn binding_assignment(input: &str) -> IResult<&str, ast::Command> {
     tuple((
         space0,
-        tag("let "),
-        space0,
+        tag("let"),
+        space1,
+        opt(tuple((tag("mut"), space1))),
         variable,
         space0,
         opt(tuple((char(':'), space0, type_def, space0))),
@@ -694,16 +717,20 @@ fn binding_assignment(input: &str) -> IResult<&str, ast::Command> {
         )),
     ))(input)
     .and_then(|(next_input, x)| {
-        let (_, _, _, v, _, t, tu) = x;
+        let (_, _, _, m, v, _, t, tu) = x;
         let (_, _, exp, _, _) = tu;
+        let mu = match m {
+            Some(a) => true,
+            None => false,
+        };
         match t {
             Some((_, _, t, _)) => Ok((
                 next_input,
-                ast::Command::Binding(ast::Binding::Assignment(v, t, exp)),
+                ast::Command::Binding(ast::Binding::Assignment(v, t, exp, mu)),
             )),
             None => Ok((
                 next_input,
-                ast::Command::Binding(ast::Binding::Assignment(v, ast::Type::Unknown, exp)),
+                ast::Command::Binding(ast::Binding::Assignment(v, ast::Type::Unknown, exp, mu)),
             )),
         }
     })
@@ -716,11 +743,12 @@ fn binding_assignment1() {
     assert!(binding_assignment("let y = 12 - 5 * 6;").unwrap().0 == "");
     assert!(binding_assignment("let z = 3").is_err());
     assert!(
-        binding_assignment("let z: i32 = 3;").unwrap().1
+        binding_assignment("let mut z: i32 = 3;").unwrap().1
             == ast::Command::Binding(ast::Binding::Assignment(
                 ast::Variable::Named("z".to_string()),
                 ast::Type::I32,
-                ast::Value::Expr(ast::Expr::Number(3))
+                ast::Value::Expr(ast::Expr::Number(3)),
+                true
             ))
     );
     // This one will be validated later on?
@@ -731,7 +759,8 @@ fn binding_assignment1() {
             == ast::Command::Binding(ast::Binding::Assignment(
                 ast::Variable::Named("z".to_string()),
                 ast::Type::Bool,
-                ast::Value::Expr(ast::Expr::Number(3))
+                ast::Value::Expr(ast::Expr::Number(3)),
+                false
             ))
     );
     assert!(
@@ -739,7 +768,8 @@ fn binding_assignment1() {
             == ast::Command::Binding(ast::Binding::Assignment(
                 ast::Variable::Named("z".to_string()),
                 ast::Type::Bool,
-                ast::Value::Bool(ast::Bool::True)
+                ast::Value::Bool(ast::Bool::True),
+                false
             ))
     );
     assert!(binding_assignment("let c = a + 43;").unwrap().0 == "");
@@ -748,8 +778,9 @@ fn binding_assignment1() {
 fn binding_declaration(input: &str) -> IResult<&str, ast::Command> {
     tuple((
         space0,
-        tag("let "),
-        space0,
+        tag("let"),
+        space1,
+        opt(tuple((tag("mut"), space1))),
         variable,
         space0,
         opt(tuple((char(':'), space0, type_def, space0))),
@@ -757,15 +788,19 @@ fn binding_declaration(input: &str) -> IResult<&str, ast::Command> {
         char(';'),
     ))(input)
     .and_then(|(next_input, x)| {
-        let (_, _, _, v, _, t, _, _) = x;
+        let (_, _, _, m, v, _, t, _, _) = x;
+        let mu = match m {
+            Some(a) => true,
+            None => false,
+        };
         match t {
             Some((_, _, t, _)) => Ok((
                 next_input,
-                ast::Command::Binding(ast::Binding::Declaration(v, t)),
+                ast::Command::Binding(ast::Binding::Declaration(v, t, mu)),
             )),
             None => Ok((
                 next_input,
-                ast::Command::Binding(ast::Binding::Declaration(v, ast::Type::Unknown)),
+                ast::Command::Binding(ast::Binding::Declaration(v, ast::Type::Unknown, mu)),
             )),
         }
     })
@@ -780,21 +815,24 @@ fn binding_declaration1() {
         binding_declaration("let z:i32;").unwrap().1
             == ast::Command::Binding(ast::Binding::Declaration(
                 ast::Variable::Named("z".to_string()),
-                ast::Type::I32
+                ast::Type::I32,
+                false
             ))
     );
     assert!(
-        binding_declaration("let z:bool;").unwrap().1
+        binding_declaration("let mut z:bool;").unwrap().1
             == ast::Command::Binding(ast::Binding::Declaration(
                 ast::Variable::Named("z".to_string()),
-                ast::Type::Bool
+                ast::Type::Bool,
+                true
             ))
     );
     assert!(
         binding_declaration("let x;").unwrap().1
             == ast::Command::Binding(ast::Binding::Declaration(
                 ast::Variable::Named("x".to_string()),
-                ast::Type::Unknown
+                ast::Type::Unknown,
+                false
             ))
     );
 }

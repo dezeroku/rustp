@@ -116,19 +116,19 @@ impl fmt::Display for Command {
 
 #[derive(PartialEq, Clone, Debug)]
 pub enum Binding {
-    // name, type
-    Declaration(Variable, Type),
-    Assignment(Variable, Type, Value),
+    /// name, type, is_mutable
+    Declaration(Variable, Type, bool),
+    Assignment(Variable, Type, Value, bool),
 }
 
 impl fmt::Display for Binding {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Binding::Declaration(name, t) => write!(f, "(declare-const {} {})", name, t),
-            Binding::Assignment(name, t, val) => write!(
+            Binding::Declaration(name, t, m) => write!(f, "(declare-const {} {} {})", name, t, m),
+            Binding::Assignment(name, t, val, m) => write!(
                 f,
-                "(declare-const {} {}); (assert (= {} {}));",
-                name, t, name, val
+                "(declare-const {} {}); (assert (= {} {})) {};",
+                name, t, name, val, m
             ),
         }
     }
