@@ -35,13 +35,19 @@ impl fmt::Display for Bool {
 
 #[derive(PartialEq, Clone, Debug)]
 pub enum ProveControl {
-    Assert(String),
+    Assert(Bool),
+    Assume(Bool),
+    // It may be possible that this is a duplicate of assert in Z3's context?
+    // It also has to be checked later on in validator if it's defined in the loop and error thrown if that's not true
+    LoopInvariant(Bool),
 }
 
 impl fmt::Display for ProveControl {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ProveControl::Assert(x) => write!(f, "(assert {})", x),
+            ProveControl::Assume(x) => write!(f, "(assume {})", x),
+            ProveControl::LoopInvariant(x) => write!(f, "(loop_invariant {})", x),
         }
     }
 }

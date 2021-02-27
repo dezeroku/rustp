@@ -5,7 +5,8 @@ use crate::parser::math;
 use nom::{
     branch::alt, bytes::complete::tag, bytes::complete::take_while1, character::complete::char,
     character::complete::multispace0, character::complete::newline, character::complete::space0,
-    character::complete::space1, combinator::opt, multi::many0, sequence::tuple, IResult,
+    character::complete::space1, combinator::not, combinator::opt, multi::many0, sequence::tuple,
+    IResult,
 };
 
 fn function_input(input: &str) -> IResult<&str, ast::Binding> {
@@ -72,12 +73,17 @@ fn function_inputs1() {
 }
 
 pub fn precondition(input: &str) -> IResult<&str, ast::Bool> {
-    tuple((tag("//%precondition"), space1, boolean::expr, newline))(input).and_then(
-        |(next_input, res)| {
-            let (_, _, c, _) = res;
-            Ok((next_input, *c))
-        },
-    )
+    tuple((
+        prove_start,
+        tag("precondition"),
+        space1,
+        boolean::expr,
+        newline,
+    ))(input)
+    .and_then(|(next_input, res)| {
+        let (_, _, _, c, _) = res;
+        Ok((next_input, *c))
+    })
 }
 
 #[test]
@@ -97,12 +103,17 @@ fn precondition1() {
 }
 
 pub fn postcondition(input: &str) -> IResult<&str, ast::Bool> {
-    tuple((tag("//%postcondition"), space1, boolean::expr, newline))(input).and_then(
-        |(next_input, res)| {
-            let (_, _, c, _) = res;
-            Ok((next_input, *c))
-        },
-    )
+    tuple((
+        prove_start,
+        tag("postcondition"),
+        space1,
+        boolean::expr,
+        newline,
+    ))(input)
+    .and_then(|(next_input, res)| {
+        let (_, _, _, c, _) = res;
+        Ok((next_input, *c))
+    })
 }
 
 #[test]
@@ -285,34 +296,32 @@ fn function3() {
 }
 
 pub fn block(input: &str) -> IResult<&str, Vec<ast::Command>> {
-    many0(tuple((multispace0, command, multispace0)))(input).and_then(|(next_input, res)| {
+    many0(tuple((
+        comments,
+        multispace0,
+        command,
+        multispace0,
+        comments,
+    )))(input)
+    .and_then(|(next_input, res)| {
         let mut result = Vec::new();
         for i in res {
-            let (_, temp, _) = i;
+            let (_, _, temp, _, _) = i;
             result.push(temp)
         }
         Ok((next_input, result))
     })
 }
 
-#[test]
-fn block1() {
-    assert!(block("let x = 1;").unwrap().0 == "");
-    assert!(block("let x = 1;//%assert 143").unwrap().0 == "");
-}
-
-fn command(input: &str) -> IResult<&str, ast::Command> {
-    alt((binding, assert))(input)
-}
-
-#[test]
-fn command1() {
-    assert!(command("//%assert 143\n").unwrap().0 == "");
-}
-
-#[test]
-fn command2() {
-    assert!(command("let a = 14;").unwrap().0 == "");
+fn comments(input: &str) -> IResult<&str, Vec<&str>> {
+    many0(tuple((multispace0, single_comment, multispace0)))(input).and_then(|(next_input, res)| {
+        let mut t = Vec::new();
+        for item in res {
+            let (_, c, _) = item;
+            t.push(c);
+        }
+        Ok((next_input, t))
+    })
 }
 
 fn take_while_not_newline(input: &str) -> IResult<&str, &str> {
@@ -326,52 +335,101 @@ fn take_while_not_newline1() {
     assert!(take_while_not_newline("ababab").unwrap().1 == "ababab");
 }
 
-fn assert(input: &str) -> IResult<&str, ast::Command> {
-    tuple((
-        prove_start,
-        tag("assert"),
-        take_while_not_newline,
-        opt(newline),
-    ))(input)
-    .map(|(next_input, res)| {
-        let (_, _, a, _) = res;
-        (
-            next_input,
-            ast::Command::ProveControl(ast::ProveControl::Assert(a.to_string())),
+fn single_comment(input: &str) -> IResult<&str, &str> {
+    not(command)(input).and_then(|(next_input, _)| {
+        tuple((tag("//"), take_while_not_newline, opt(newline)))(input).and_then(
+            |(next_input, res)| {
+                let (_, c, _) = res;
+                Ok((next_input, c))
+            },
         )
     })
-    //prove_start(input).and_then(|(next_input, _)| {
-    //    tag("assert")(next_input).and_then(|(next_input, _)| {
-    //        // If t fails, there's no newline, get whole line as assert
-    //        // If t is ok, there's a newline somewhere, get only parsed content as assert.
-    //        let t = take_while_not_newline(next_input).unwrap();
-    //        // TODO: get the last newline if exists
-    //        Ok((t.0, ast::ProveControl::Assert(t.1.to_string())))
-    //        //match t {
-    //        //    Ok((next_input, res)) => {
-    //        //        //let next_input = newline(next_input).unwrap().0;
-    //        //        // TODO: result the newline that's left
-    //        //        Ok((next_input, ast::ProveControl::Assert(res.to_string())))
-    //        //    }
-    //        //    Err(a) => Ok(("", ast::ProveControl::Assert(next_input.to_string()))),
-    //        //}
-    //    })
-    //})
+}
+
+#[test]
+fn block1() {
+    assert!(block("let x = 1;").unwrap().0 == "");
+    assert!(block("let x = 1;//%assert a < 143\n").unwrap().0 == "");
+}
+
+fn command(input: &str) -> IResult<&str, ast::Command> {
+    alt((binding, prove_control))(input)
+}
+
+#[test]
+fn command1() {
+    assert!(command("//%assert b == 143 % 4\n").unwrap().0 == "");
+}
+
+#[test]
+fn command2() {
+    assert!(command("let a = 14;").unwrap().0 == "");
+}
+
+fn prove_control(input: &str) -> IResult<&str, ast::Command> {
+    alt((assert, assume, loop_invariant))(input)
+}
+
+fn assert(input: &str) -> IResult<&str, ast::Command> {
+    tuple((prove_start, tag("assert"), space1, boolean::expr, newline))(input).map(
+        |(next_input, res)| {
+            let (_, _, _, a, _) = res;
+            (
+                next_input,
+                ast::Command::ProveControl(ast::ProveControl::Assert(*a)),
+            )
+        },
+    )
 }
 
 #[test]
 fn assert1() {
-    assert!(assert("//%assert 143").is_ok());
+    assert!(assert("//%assert 143 == 12\n").is_ok());
+    assert!(assert("//%assert 143 - 4 < 2\n").unwrap().0 == "");
+    assert!(assert("//%assert true\n").unwrap().0 == "");
+}
+
+fn assume(input: &str) -> IResult<&str, ast::Command> {
+    tuple((prove_start, tag("assume"), space1, boolean::expr, newline))(input).map(
+        |(next_input, res)| {
+            let (_, _, _, a, _) = res;
+            (
+                next_input,
+                ast::Command::ProveControl(ast::ProveControl::Assume(*a)),
+            )
+        },
+    )
 }
 
 #[test]
-fn assert2() {
-    assert!(assert("//%assert 143").unwrap().0 == "");
+fn assume1() {
+    assert!(assume("//%assume 143 == 12\n").is_ok());
+    assert!(assume("//%assume 143 - 4 < 2\n").unwrap().0 == "");
+    assert!(assume("//%assume true\n").unwrap().0 == "");
+}
+
+fn loop_invariant(input: &str) -> IResult<&str, ast::Command> {
+    tuple((
+        prove_start,
+        tag("loop_invariant"),
+        space1,
+        boolean::expr,
+        newline,
+    ))(input)
+    .map(|(next_input, res)| {
+        let (_, _, _, a, _) = res;
+        (
+            next_input,
+            ast::Command::ProveControl(ast::ProveControl::LoopInvariant(*a)),
+        )
+    })
 }
 
 #[test]
-fn assert3() {
-    assert!(assert("//%assert 143\n").unwrap().0 == "");
+fn loop_invariant1() {
+    assert!(loop_invariant("//%loop_invariant 143 == 12\n").is_ok());
+    assert!(loop_invariant("//%loop_invariant 143 - 4 < 2\n").unwrap().0 == "");
+    assert!(loop_invariant("//%loop_invariant true\n").unwrap().0 == "");
 }
 
 fn prove_start(input: &str) -> IResult<&str, &str> {

@@ -2,5 +2,15 @@
 //%postcondition c - 2 == 1
 fn a (b: i32, c:bool, a: i32 ) -> bool {
 let a: i32 = 14;
+
+// just ignore me
+
+// the one below is not to be ignored
+//the one below is not to be ignored
+//%assert a == 14
+//%assume b %2 == 1
+
 let b: bool;
+// this is just a normal comment
+//%loop_invariant c== 3
 }
