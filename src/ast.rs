@@ -101,6 +101,7 @@ impl fmt::Display for Value {
 pub enum Command {
     Binding(Binding),
     ProveControl(ProveControl),
+    Block(Block),
 }
 
 impl fmt::Display for Command {
@@ -108,6 +109,7 @@ impl fmt::Display for Command {
         match self {
             Command::Binding(x) => write!(f, "{}", x),
             Command::ProveControl(x) => write!(f, "{}", x),
+            Command::Block(x) => write!(f, "{}", x),
         }
     }
 }
@@ -191,6 +193,7 @@ impl fmt::Display for Opcode {
     }
 }
 
+#[derive(PartialEq, Clone, Debug)]
 pub enum Block {
     /// vector of conditions for if/elif, vector of vectors of commands for if/elif, vector of commands for else
     If(Vec<Bool>, Vec<Vec<Command>>, Vec<Command>),

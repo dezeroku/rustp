@@ -342,7 +342,7 @@ fn take_while_not_newline1() {
 
 fn single_comment(input: &str) -> IResult<&str, &str> {
     not(command)(input).and_then(|(next_input, _)| {
-        tuple((tag("//"), take_while_not_newline, opt(newline)))(input).and_then(
+        tuple((tag("//"), take_while_not_newline, opt(newline)))(next_input).and_then(
             |(next_input, res)| {
                 let (_, c, _) = res;
                 Ok((next_input, c))
@@ -353,7 +353,7 @@ fn single_comment(input: &str) -> IResult<&str, &str> {
 
 fn multiline_comment(input: &str) -> IResult<&str, &str> {
     not(command)(input).and_then(|(next_input, _)| {
-        tuple((tag("/*"), take_until("*/"), tag("*/")))(input).and_then(|(next_input, res)| {
+        tuple((tag("/*"), take_until("*/"), tag("*/")))(next_input).and_then(|(next_input, res)| {
             let (_, c, _) = res;
             Ok((next_input, c))
         })
@@ -367,7 +367,7 @@ fn block1() {
 }
 
 fn command(input: &str) -> IResult<&str, ast::Command> {
-    alt((binding, prove_control))(input)
+    alt((binding, prove_control, if_else))(input)
 }
 
 #[test]
@@ -378,6 +378,179 @@ fn command1() {
 #[test]
 fn command2() {
     assert!(command("let a = 14;").unwrap().0 == "");
+}
+
+fn if_else(input: &str) -> IResult<&str, ast::Command> {
+    tuple((
+        single_if,
+        many0(tuple((space0, tag("else"), space0, single_if))),
+        opt(tuple((
+            space0,
+            tag("else"),
+            space0,
+            tag("{"),
+            space0,
+            block,
+            space0,
+            tag("}"),
+        ))),
+    ))(input)
+    .and_then(|(next_input, res)| {
+        let (first, rest, e) = res;
+
+        let mut conds = Vec::new();
+        let mut comms = Vec::new();
+
+        match first {
+            ast::Command::Block(b) => match b {
+                ast::Block::If(mut con, mut com, _) => {
+                    conds.push(con.pop().unwrap());
+                    comms.push(com.pop().unwrap());
+                }
+                _ => panic!("Not valid scenario"),
+            },
+            _ => panic!("Not valid scenario"),
+        }
+
+        for elem in rest {
+            let (_, _, _, i) = elem;
+            match i {
+                ast::Command::Block(b) => match b {
+                    ast::Block::If(mut con, mut com, _) => {
+                        conds.push(con.pop().unwrap());
+                        comms.push(com.pop().unwrap());
+                    }
+                    _ => panic!("Not valid scenario"),
+                },
+                _ => panic!("Not valid scenario"),
+            }
+        }
+
+        let el = match e {
+            Some((_, _, _, _, _, b, _, _)) => b,
+            None => Vec::new(),
+        };
+
+        Ok((
+            next_input,
+            ast::Command::Block(ast::Block::If(conds, comms, el)),
+        ))
+    })
+}
+
+#[test]
+fn if_else1() {
+    assert!(if_else("if a == 12 {let b = 3;}").unwrap().0 == "");
+    assert!(
+        if_else("if a == 12 {let b = 3;//%assert b == 3\n}")
+            .unwrap()
+            .0
+            == ""
+    );
+}
+
+#[test]
+fn if_else2() {
+    assert!(
+        if_else("if a == 12 {let b = 3;} else if a == 13 {let b = 4;} else {let b = 1;}")
+            .unwrap()
+            .0
+            == ""
+    );
+}
+
+#[test]
+fn if_else3() {
+    let a = if_else("if a == 12 {let b = 3;} else if a == 13 {let b = 4;} else {let b = 1;}")
+        .unwrap()
+        .1;
+
+    let mut conds = Vec::new();
+    let mut comms = Vec::new();
+    let mut comms_1 = Vec::new();
+    let mut comms_2 = Vec::new();
+
+    let mut el = Vec::new();
+
+    conds.push(ast::Bool::Equal(
+        ast::Expr::Variable(ast::Variable::Named("a".to_string())),
+        ast::Expr::Number(12),
+    ));
+
+    conds.push(ast::Bool::Equal(
+        ast::Expr::Variable(ast::Variable::Named("a".to_string())),
+        ast::Expr::Number(13),
+    ));
+
+    comms_1.push(ast::Command::Binding(ast::Binding::Assignment(
+        ast::Variable::Named("b".to_string()),
+        ast::Type::Unknown,
+        ast::Value::Expr(ast::Expr::Number(3)),
+    )));
+    comms_2.push(ast::Command::Binding(ast::Binding::Assignment(
+        ast::Variable::Named("b".to_string()),
+        ast::Type::Unknown,
+        ast::Value::Expr(ast::Expr::Number(4)),
+    )));
+
+    comms.push(comms_1);
+    comms.push(comms_2);
+
+    el.push(ast::Command::Binding(ast::Binding::Assignment(
+        ast::Variable::Named("b".to_string()),
+        ast::Type::Unknown,
+        ast::Value::Expr(ast::Expr::Number(1)),
+    )));
+
+    let b = ast::Command::Block(ast::Block::If(conds, comms, el));
+
+    assert!(a == b);
+}
+
+#[test]
+fn if_else4() {
+    assert!(if_else("if a == 14 {\nlet c = 3;\n}").unwrap().0 == "");
+    assert!(
+        if_else("if a == 14 {\nlet c = 3;\n} else if a == 13 {\n   let c = a + 43;\n}")
+            .unwrap()
+            .0
+            == ""
+    );
+    assert!(if_else("if a == 14 {\nlet c = 3;\n} else if a == 13 {\n   let c = a + 43;\n} else {\n   let c = a + 123;\n}").unwrap().0 == "");
+}
+
+fn single_if(input: &str) -> IResult<&str, ast::Command> {
+    tuple((
+        tag("if"),
+        space0,
+        boolean::expr,
+        space0,
+        tag("{"),
+        block,
+        tag("}"),
+        space0,
+    ))(input)
+    .and_then(|(next_input, res)| {
+        let (_, _, c, _, _, b, _, _) = res;
+        let mut conds = Vec::new();
+        conds.push(*c);
+
+        let mut comms = Vec::new();
+        comms.push(b);
+
+        let t = ast::Block::If(conds, comms, Vec::new());
+        Ok((next_input, ast::Command::Block(t)))
+    })
+}
+
+fn single_if1() {
+    assert!(single_if("if a == 12 {let b = 3;}").unwrap().0 == "");
+    assert!(
+        single_if("if a == 12 {let b = 3;//%assert b == 3\n}")
+            .unwrap()
+            .0
+            == ""
+    );
 }
 
 fn prove_control(input: &str) -> IResult<&str, ast::Command> {
@@ -496,11 +669,15 @@ fn binding(input: &str) -> IResult<&str, ast::Command> {
 }
 
 fn value(input: &str) -> IResult<&str, ast::Value> {
-    boolean::expr(input)
-        .and_then(|(next_input, res)| Ok((next_input, ast::Value::Bool(*res))))
-        .or_else(|_| {
-            math::expr(input).and_then(|(next_input, res)| Ok((next_input, ast::Value::Expr(*res))))
-        })
+    alt((value_bool, value_expr))(input)
+}
+
+fn value_bool(input: &str) -> IResult<&str, ast::Value> {
+    boolean::expr(input).and_then(|(next_input, res)| Ok((next_input, ast::Value::Bool(*res))))
+}
+
+fn value_expr(input: &str) -> IResult<&str, ast::Value> {
+    math::expr(input).and_then(|(next_input, res)| Ok((next_input, ast::Value::Expr(*res))))
 }
 
 fn binding_assignment(input: &str) -> IResult<&str, ast::Command> {
@@ -511,14 +688,14 @@ fn binding_assignment(input: &str) -> IResult<&str, ast::Command> {
         variable,
         space0,
         opt(tuple((char(':'), space0, type_def, space0))),
-        char('='),
-        space0,
-        value,
-        space0,
-        char(';'),
+        alt((
+            tuple((char('='), space0, value_bool, space0, char(';'))),
+            tuple((char('='), space0, value_expr, space0, char(';'))),
+        )),
     ))(input)
     .and_then(|(next_input, x)| {
-        let (_, _, _, v, _, t, _, _, exp, _, _) = x;
+        let (_, _, _, v, _, t, tu) = x;
+        let (_, _, exp, _, _) = tu;
         match t {
             Some((_, _, t, _)) => Ok((
                 next_input,
@@ -565,6 +742,7 @@ fn binding_assignment1() {
                 ast::Value::Bool(ast::Bool::True)
             ))
     );
+    assert!(binding_assignment("let c = a + 43;").unwrap().0 == "");
 }
 
 fn binding_declaration(input: &str) -> IResult<&str, ast::Command> {

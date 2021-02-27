@@ -18,4 +18,11 @@ matter
 at all */let b: bool;
 // this is just a normal comment
 //%loop_invariant c== 3
+if a == 14 {
+   let c = 3;
+} else if a == 13 {
+   let c = a + 43;
+} else {
+   let c = a + 123;
+}
 }
