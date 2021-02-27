@@ -10,7 +10,12 @@ let a: i32 = 14;
 //%assert a == 14
 //%assume b %2 == 1
 
-let b: bool;
+/*
+this
+also
+does not
+matter
+at all */let b: bool;
 // this is just a normal comment
 //%loop_invariant c== 3
 }

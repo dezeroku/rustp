@@ -3,10 +3,10 @@ use crate::parser::boolean;
 use crate::parser::math;
 
 use nom::{
-    branch::alt, bytes::complete::tag, bytes::complete::take_while1, character::complete::char,
-    character::complete::multispace0, character::complete::newline, character::complete::space0,
-    character::complete::space1, combinator::not, combinator::opt, multi::many0, sequence::tuple,
-    IResult,
+    branch::alt, bytes::complete::tag, bytes::complete::take_until, bytes::complete::take_while1,
+    character::complete::char, character::complete::multispace0, character::complete::newline,
+    character::complete::space0, character::complete::space1, combinator::not, combinator::opt,
+    multi::many0, sequence::tuple, IResult,
 };
 
 fn function_input(input: &str) -> IResult<&str, ast::Binding> {
@@ -314,7 +314,12 @@ pub fn block(input: &str) -> IResult<&str, Vec<ast::Command>> {
 }
 
 fn comments(input: &str) -> IResult<&str, Vec<&str>> {
-    many0(tuple((multispace0, single_comment, multispace0)))(input).and_then(|(next_input, res)| {
+    many0(tuple((
+        multispace0,
+        alt((single_comment, multiline_comment)),
+        multispace0,
+    )))(input)
+    .and_then(|(next_input, res)| {
         let mut t = Vec::new();
         for item in res {
             let (_, c, _) = item;
@@ -343,6 +348,15 @@ fn single_comment(input: &str) -> IResult<&str, &str> {
                 Ok((next_input, c))
             },
         )
+    })
+}
+
+fn multiline_comment(input: &str) -> IResult<&str, &str> {
+    not(command)(input).and_then(|(next_input, _)| {
+        tuple((tag("/*"), take_until("*/"), tag("*/")))(input).and_then(|(next_input, res)| {
+            let (_, c, _) = res;
+            Ok((next_input, c))
+        })
     })
 }
 
