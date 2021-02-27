@@ -1,7 +1,7 @@
 //%precondition b % 4 == 2
 //%postcondition c - 2 == 1
 fn a (b: i32, c:bool, a: i32 ) -> bool {
-let a: i32 = 14;
+let mut a: i32 = 14;
 
 // just ignore me
 
@@ -10,6 +10,7 @@ let a: i32 = 14;
 //%assert a == 14
 //%assume b %2 == 1
 
+a = 32;
 /*
 this
 also

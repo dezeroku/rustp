@@ -19,6 +19,7 @@ fn main() {
 
     // OR
     println!("Got: |{:#?}|", t.1);
+    println!("Left: |{}|", t.0);
     println!("Got: |{:?}|", t.1);
 
     // OR

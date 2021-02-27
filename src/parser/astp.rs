@@ -386,7 +386,7 @@ fn block1() {
 }
 
 fn command(input: &str) -> IResult<&str, ast::Command> {
-    alt((binding, prove_control, if_else))(input)
+    alt((binding, prove_control, assignment, if_else))(input)
 }
 
 #[test]
@@ -397,6 +397,54 @@ fn command1() {
 #[test]
 fn command2() {
     assert!(command("let a = 14;").unwrap().0 == "");
+}
+
+fn assignment(input: &str) -> IResult<&str, ast::Command> {
+    alt((
+        tuple((
+            space0,
+            variable,
+            space0,
+            tag("="),
+            space0,
+            value_bool,
+            space0,
+            tag(";"),
+        )),
+        tuple((
+            space0,
+            variable,
+            space0,
+            tag("="),
+            space0,
+            value_expr,
+            space0,
+            tag(";"),
+        )),
+    ))(input)
+    .and_then(|(next_input, res)| {
+        let (_, v, _, _, _, val, _, _) = res;
+        Ok((next_input, ast::Command::Assignment(v, val)))
+    })
+}
+
+#[test]
+fn assignment1() {
+    assert!(assignment("a = 12;").unwrap().0 == "");
+    assert!(
+        assignment("b = 12;").unwrap().1
+            == ast::Command::Assignment(
+                ast::Variable::Named("b".to_string()),
+                ast::Value::Expr(ast::Expr::Number(12))
+            )
+    );
+    assert!(
+        assignment("b = true;").unwrap().1
+            == ast::Command::Assignment(
+                ast::Variable::Named("b".to_string()),
+                ast::Value::Bool(ast::Bool::True)
+            )
+    );
 }
 
 fn if_else(input: &str) -> IResult<&str, ast::Command> {

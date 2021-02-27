@@ -100,6 +100,8 @@ impl fmt::Display for Value {
 #[derive(PartialEq, Clone, Debug)]
 pub enum Command {
     Binding(Binding),
+    /// Variable has to be already defined via binding to be assigned
+    Assignment(Variable, Value),
     ProveControl(ProveControl),
     Block(Block),
 }
@@ -108,6 +110,7 @@ impl fmt::Display for Command {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Command::Binding(x) => write!(f, "{}", x),
+            Command::Assignment(a, b) => write!(f, "{}={}", a, b),
             Command::ProveControl(x) => write!(f, "{}", x),
             Command::Block(x) => write!(f, "{}", x),
         }
