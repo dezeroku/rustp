@@ -1,9 +1,10 @@
 use crate::ast;
 use crate::parser::astp;
+use crate::parser::math;
 
 use nom::{
-    branch::alt, bytes::complete::tag, character::complete::space0, combinator::opt, multi::many0,
-    sequence::tuple, IResult,
+    branch::alt, bytes::complete::tag, character::complete::space0, multi::many0, sequence::tuple,
+    IResult,
 };
 
 // concept: second answer to https://cs.stackexchange.com/questions/10558/grammar-for-describing-boolean-expressions-with-and-or-and-not
@@ -93,8 +94,27 @@ fn expr2() {
     assert!(expr("!false && (a && b) || (!c) && true").unwrap().0 == "");
 }
 
+#[test]
+fn expr3() {
+    assert!(expr("true && (a == (b + 3))").unwrap().0 == "");
+    assert!(
+        expr("true && (a == (b + 3))").unwrap().1
+            == Box::new(ast::Bool::And(
+                Box::new(ast::Bool::True),
+                Box::new(ast::Bool::Equal(
+                    ast::Expr::Variable(ast::Variable::Named("a".to_string())),
+                    ast::Expr::Op(
+                        Box::new(ast::Expr::Variable(ast::Variable::Named("b".to_string()))),
+                        ast::Opcode::Add,
+                        Box::new(ast::Expr::Number(3))
+                    )
+                ))
+            ))
+    );
+}
+
 fn factor(input: &str) -> IResult<&str, Box<ast::Bool>> {
-    alt((factor_id, factor_not, factor_paren))(input)
+    alt((factor_compare, factor_id, factor_not, factor_paren))(input)
 }
 
 fn variable(input: &str) -> IResult<&str, Box<ast::Bool>> {
@@ -117,6 +137,174 @@ fn factor_not(input: &str) -> IResult<&str, Box<ast::Bool>> {
         let (_, _, a) = res;
         (next_input, Box::new(ast::Bool::Not(a)))
     })
+}
+
+fn factor_compare(input: &str) -> IResult<&str, Box<ast::Bool>> {
+    alt((
+        factor_compare_equal,
+        factor_compare_greater_equal,
+        factor_compare_greater,
+        factor_compare_smaller_equal,
+        factor_compare_smaller,
+    ))(input)
+}
+
+fn factor_compare_equal(input: &str) -> IResult<&str, Box<ast::Bool>> {
+    tuple((math::expr, space0, tag("=="), space0, math::expr))(input).and_then(
+        |(next_input, res)| {
+            let (a, _, _, _, b) = res;
+            Ok((next_input, Box::new(ast::Bool::Equal(*a, *b))))
+        },
+    )
+}
+
+fn factor_compare_greater_equal(input: &str) -> IResult<&str, Box<ast::Bool>> {
+    tuple((math::expr, space0, tag(">="), space0, math::expr))(input).and_then(
+        |(next_input, res)| {
+            let (a, _, _, _, b) = res;
+            Ok((next_input, Box::new(ast::Bool::GreaterEqual(*a, *b))))
+        },
+    )
+}
+fn factor_compare_greater(input: &str) -> IResult<&str, Box<ast::Bool>> {
+    tuple((math::expr, space0, tag(">"), space0, math::expr))(input).and_then(
+        |(next_input, res)| {
+            let (a, _, _, _, b) = res;
+            Ok((next_input, Box::new(ast::Bool::Greater(*a, *b))))
+        },
+    )
+}
+
+fn factor_compare_smaller_equal(input: &str) -> IResult<&str, Box<ast::Bool>> {
+    tuple((math::expr, space0, tag("<="), space0, math::expr))(input).and_then(
+        |(next_input, res)| {
+            let (a, _, _, _, b) = res;
+            Ok((next_input, Box::new(ast::Bool::SmallerEqual(*a, *b))))
+        },
+    )
+}
+fn factor_compare_smaller(input: &str) -> IResult<&str, Box<ast::Bool>> {
+    tuple((math::expr, space0, tag("<"), space0, math::expr))(input).and_then(
+        |(next_input, res)| {
+            let (a, _, _, _, b) = res;
+            Ok((next_input, Box::new(ast::Bool::Smaller(*a, *b))))
+        },
+    )
+}
+
+#[test]
+fn factor_compare_equal1() {
+    assert!(
+        factor_compare_equal("12 == 43").unwrap().1
+            == Box::new(ast::Bool::Equal(
+                ast::Expr::Number(12),
+                ast::Expr::Number(43)
+            ))
+    );
+
+    assert!(
+        factor_compare_equal("a == (b + 3)").unwrap().1
+            == Box::new(ast::Bool::Equal(
+                ast::Expr::Variable(ast::Variable::Named("a".to_string())),
+                ast::Expr::Op(
+                    Box::new(ast::Expr::Variable(ast::Variable::Named("b".to_string()))),
+                    ast::Opcode::Add,
+                    Box::new(ast::Expr::Number(3))
+                )
+            ))
+    );
+}
+
+#[test]
+fn factor_compare_greater_equal1() {
+    assert!(
+        factor_compare_greater_equal("12 >= 43").unwrap().1
+            == Box::new(ast::Bool::GreaterEqual(
+                ast::Expr::Number(12),
+                ast::Expr::Number(43)
+            ))
+    );
+
+    assert!(
+        factor_compare_greater_equal("a >= (b + 3)").unwrap().1
+            == Box::new(ast::Bool::GreaterEqual(
+                ast::Expr::Variable(ast::Variable::Named("a".to_string())),
+                ast::Expr::Op(
+                    Box::new(ast::Expr::Variable(ast::Variable::Named("b".to_string()))),
+                    ast::Opcode::Add,
+                    Box::new(ast::Expr::Number(3))
+                )
+            ))
+    );
+}
+
+#[test]
+fn factor_compare_smaller_equal1() {
+    assert!(
+        factor_compare_smaller_equal("12 <= 43").unwrap().1
+            == Box::new(ast::Bool::SmallerEqual(
+                ast::Expr::Number(12),
+                ast::Expr::Number(43)
+            ))
+    );
+
+    assert!(
+        factor_compare_smaller_equal("a <= (b + 3)").unwrap().1
+            == Box::new(ast::Bool::SmallerEqual(
+                ast::Expr::Variable(ast::Variable::Named("a".to_string())),
+                ast::Expr::Op(
+                    Box::new(ast::Expr::Variable(ast::Variable::Named("b".to_string()))),
+                    ast::Opcode::Add,
+                    Box::new(ast::Expr::Number(3))
+                )
+            ))
+    );
+}
+
+#[test]
+fn factor_compare_greater1() {
+    assert!(
+        factor_compare_greater("12 > 43").unwrap().1
+            == Box::new(ast::Bool::Greater(
+                ast::Expr::Number(12),
+                ast::Expr::Number(43)
+            ))
+    );
+
+    assert!(
+        factor_compare_greater("a > (b + 3)").unwrap().1
+            == Box::new(ast::Bool::Greater(
+                ast::Expr::Variable(ast::Variable::Named("a".to_string())),
+                ast::Expr::Op(
+                    Box::new(ast::Expr::Variable(ast::Variable::Named("b".to_string()))),
+                    ast::Opcode::Add,
+                    Box::new(ast::Expr::Number(3))
+                )
+            ))
+    );
+}
+
+#[test]
+fn factor_compare_smaller1() {
+    assert!(
+        factor_compare_smaller("12 < 43").unwrap().1
+            == Box::new(ast::Bool::Smaller(
+                ast::Expr::Number(12),
+                ast::Expr::Number(43)
+            ))
+    );
+
+    assert!(
+        factor_compare_smaller("a < (b + 3)").unwrap().1
+            == Box::new(ast::Bool::Smaller(
+                ast::Expr::Variable(ast::Variable::Named("a".to_string())),
+                ast::Expr::Op(
+                    Box::new(ast::Expr::Variable(ast::Variable::Named("b".to_string()))),
+                    ast::Opcode::Add,
+                    Box::new(ast::Expr::Number(3))
+                )
+            ))
+    );
 }
 
 #[test]

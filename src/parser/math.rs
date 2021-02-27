@@ -3,9 +3,8 @@ use crate::ast;
 use crate::parser::astp;
 
 use nom::{
-    bytes::complete::take_while1, character::complete::char, character::complete::newline,
-    character::complete::one_of, character::complete::space0, multi::many0, sequence::tuple,
-    IResult,
+    bytes::complete::take_while1, character::complete::char, character::complete::one_of,
+    character::complete::space0, multi::many0, sequence::tuple, IResult,
 };
 
 use std::str::FromStr;
@@ -14,19 +13,25 @@ fn digito(input: &str) -> IResult<&str, &str> {
     take_while1(|a| char::is_digit(a, 10))(input)
 }
 
-fn multiple_expr(input: &str) -> IResult<&str, Vec<ast::Expr>> {
-    let mut result = Vec::new();
-    expr(input).and_then(|(next_input, res)| {
-        result.push(*res);
-        many0(tuple((newline, expr)))(next_input).map(|(next_input, res_vec)| {
-            for item in res_vec {
-                let (_, val) = item;
-                result.push(*val);
-            }
-            (next_input, result)
-        })
-    })
-}
+//fn multiple_expr(input: &str) -> IResult<&str, Vec<ast::Expr>> {
+//    let mut result = Vec::new();
+//    expr(input).and_then(|(next_input, res)| {
+//        result.push(*res);
+//        many0(tuple((newline, expr)))(next_input).map(|(next_input, res_vec)| {
+//            for item in res_vec {
+//                let (_, val) = item;
+//                result.push(*val);
+//            }
+//            (next_input, result)
+//        })
+//    })
+//}
+
+//#[test]
+//fn multiple_expr1() {
+//    assert!(multiple_expr("13 + 3\n 12 * 3").is_ok());
+//    assert!(multiple_expr("13 + 3\n 12 * 3").unwrap().0 == "");
+//}
 
 // Concept: first answer to https://stackoverflow.com/questions/59508862/using-parser-combinator-to-parse-simple-math-expression
 
@@ -153,12 +158,6 @@ fn add_or_subtract(input: &str) -> IResult<&str, ast::Opcode> {
         }
         Err(a) => Err(a),
     }
-}
-
-#[test]
-fn multiple_expr1() {
-    assert!(multiple_expr("13 + 3\n 12 * 3").is_ok());
-    assert!(multiple_expr("13 + 3\n 12 * 3").unwrap().0 == "");
 }
 
 #[test]

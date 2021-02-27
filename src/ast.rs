@@ -8,6 +8,11 @@ pub enum Bool {
     Variable(Variable),
     True,
     False,
+    Equal(Expr, Expr),
+    GreaterEqual(Expr, Expr),
+    SmallerEqual(Expr, Expr),
+    Greater(Expr, Expr),
+    Smaller(Expr, Expr),
 }
 
 impl fmt::Display for Bool {
@@ -19,6 +24,11 @@ impl fmt::Display for Bool {
             Bool::Variable(a) => write!(f, "VAR: {}", a),
             Bool::True => write!(f, "true"),
             Bool::False => write!(f, "false"),
+            Bool::Equal(a, b) => write!(f, "==: {} {}", a, b),
+            Bool::Greater(a, b) => write!(f, ">: {} {}", a, b),
+            Bool::Smaller(a, b) => write!(f, "<: {} {}", a, b),
+            Bool::GreaterEqual(a, b) => write!(f, ">=: {} {}", a, b),
+            Bool::SmallerEqual(a, b) => write!(f, "<=: {} {}", a, b),
         }
     }
 }
@@ -211,6 +221,9 @@ pub struct Function {
     pub input: Vec<Binding>,
     // single type, as returning multiple values requires tuple anyway
     pub output: Type,
+    // default value for these is just true
+    pub precondition: Bool,
+    pub postcondition: Bool,
 }
 
 impl fmt::Display for Function {
@@ -222,8 +235,8 @@ impl fmt::Display for Function {
         }
         let mut input: String = "".to_owned();
         for item in self.input.iter() {
-            temp += &input.to_string();
-            temp += "\t";
+            input += &item.to_string();
+            input += "\t";
         }
         write!(
             f,
