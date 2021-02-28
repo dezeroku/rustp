@@ -56,7 +56,8 @@ impl fmt::Display for ProveControl {
 pub enum Type {
     Bool,
     I32,
-    Tuple(Box<Type>),
+    /// no nested tuples for now, although this can be easily lifted if needed
+    Tuple(Vec<Type>),
     // How to handle pointer type?
     Pointer(Box<Type>),
     /// type of the array and its length
@@ -71,7 +72,7 @@ impl fmt::Display for Type {
         match self {
             Type::I32 => write!(f, "Int"),
             Type::Bool => write!(f, "Bool"),
-            Type::Tuple(a) => write!(f, "Tuple({})", a),
+            Type::Tuple(a) => write!(f, "Tuple({:?})", a),
             Type::Pointer(a) => write!(f, "Pointer({})", a),
             Type::Array(a, l) => write!(f, "Array({}, {})", a, l),
             Type::Unit => write!(f, "Unit"),

@@ -207,6 +207,16 @@ fn assignment(input: &str) -> IResult<&str, ast::Command> {
             space0,
             tag("="),
             space0,
+            _tuple,
+            space0,
+            tag(";"),
+        )),
+        tuple((
+            space0,
+            variable,
+            space0,
+            tag("="),
+            space0,
             boolean::expr_val,
             space0,
             tag(";"),
@@ -383,6 +393,7 @@ pub fn r_value(input: &str) -> IResult<&str, ast::Value> {
     // TODO: this will be problematic due to possibility of boolean and math expr_val consuming same input, just in a different level
     // handle it somehow based on the length of input matched?
     alt((
+        _tuple,
         function_call,
         variable_val,
         math::expr_val,
@@ -442,6 +453,7 @@ fn binding_assignment(input: &str) -> IResult<&str, ast::Command> {
         space0,
         opt(tuple((char(':'), space0, type_def, space0))),
         alt((
+            tuple((char('='), space0, _tuple, space0, char(';'))),
             tuple((char('='), space0, boolean::expr_val, space0, char(';'))),
             tuple((char('='), space0, math::expr_val, space0, char(';'))),
         )),
@@ -497,8 +509,78 @@ fn binding_declaration(input: &str) -> IResult<&str, ast::Command> {
     })
 }
 
+// TODO: _tuple_assignment can work similarly, but return vector of values and handle _ properly
+
+fn _tuple_type(input: &str) -> IResult<&str, ast::Type> {
+    tuple((
+        tag("("),
+        space0,
+        type_def_single,
+        space0,
+        char(','),
+        space0,
+        opt(type_def_single),
+        space0,
+        many0(tuple((char(','), space0, type_def_single, space0))),
+        space0,
+        tag(")"),
+    ))(input)
+    .and_then(|(next_input, res)| {
+        let (_, _, f, _, _, _, s, _, r, _, _) = res;
+        let mut result = Vec::new();
+        result.push(f);
+        match s {
+            Some(a) => result.push(a),
+            None => {}
+        }
+
+        for item in r {
+            let (_, _, t, _) = item;
+            result.push(t);
+        }
+
+        Ok((next_input, ast::Type::Tuple(result)))
+    })
+}
+
+fn _tuple(input: &str) -> IResult<&str, ast::Value> {
+    tuple((
+        tag("("),
+        space0,
+        r_value,
+        space0,
+        char(','),
+        space0,
+        opt(r_value),
+        space0,
+        many0(tuple((char(','), space0, r_value, space0))),
+        space0,
+        tag(")"),
+    ))(input)
+    .and_then(|(next_input, res)| {
+        let (_, _, f, _, _, _, s, _, r, _, _) = res;
+        let mut result = Vec::new();
+        result.push(f);
+        match s {
+            Some(a) => result.push(a),
+            None => {}
+        }
+
+        for item in r {
+            let (_, _, t, _) = item;
+            result.push(t);
+        }
+
+        Ok((next_input, ast::Value::Tuple(result)))
+    })
+}
+
 fn type_def(input: &str) -> IResult<&str, ast::Type> {
-    // TODO: handle vector, tuple, etc.
+    // TODO: handle array
+    alt((_tuple_type, type_def_single))(input)
+}
+
+fn type_def_single(input: &str) -> IResult<&str, ast::Type> {
     alt((type_def_bool, type_def_i32))(input)
 }
 
@@ -739,6 +821,7 @@ mod test {
                     ast::Value::Bool(ast::Bool::True)
                 )
         );
+        assert!(assignment("a = (12, false, a);").unwrap().0 == "");
     }
 
     #[test]
@@ -932,6 +1015,12 @@ mod test {
                 ))
         );
         assert!(binding_assignment("let c = a + 43;").unwrap().0 == "");
+        assert!(
+            binding_assignment("let c: (i32, bool) = (12, false);")
+                .unwrap()
+                .0
+                == ""
+        );
     }
 
     #[test]
@@ -963,5 +1052,59 @@ mod test {
                     false
                 ))
         );
+        assert!(binding_declaration("let c: (i32, bool);").unwrap().0 == "");
+    }
+
+    #[test]
+    fn _tuple1() {
+        let mut first = Vec::new();
+        first.push(ast::Value::Variable(ast::Variable::Named("a".to_string())));
+
+        let mut second = Vec::new();
+        second.push(ast::Value::Expr(ast::Expr::Number(1)));
+
+        let mut third = Vec::new();
+        third.push(ast::Value::Expr(ast::Expr::Number(1)));
+        third.push(ast::Value::Expr(ast::Expr::Number(2)));
+
+        let mut fourth = Vec::new();
+        fourth.push(ast::Value::Variable(ast::Variable::Named("a".to_string())));
+        fourth.push(ast::Value::Variable(ast::Variable::Named("e".to_string())));
+
+        let mut fifth = Vec::new();
+        fifth.push(ast::Value::Variable(ast::Variable::Named("a".to_string())));
+        fifth.push(ast::Value::Variable(ast::Variable::Named("e".to_string())));
+        fifth.push(ast::Value::Expr(ast::Expr::Number(1)));
+
+        let mut sixth = Vec::new();
+        sixth.push(ast::Value::Expr(ast::Expr::Number(1)));
+        sixth.push(ast::Value::Variable(ast::Variable::Named("a".to_string())));
+
+        let mut seventh = Vec::new();
+        seventh.push(ast::Value::Expr(ast::Expr::Number(1)));
+        seventh.push(ast::Value::Expr(ast::Expr::Number(2)));
+        seventh.push(ast::Value::Variable(ast::Variable::Named("a".to_string())));
+
+        assert!(_tuple("(a)").is_err());
+        assert!(_tuple("(a,)").unwrap().1 == ast::Value::Tuple(first));
+        assert!(_tuple("(a, false)").unwrap().0 == "");
+        assert!(_tuple("(1,)") == Ok(("", ast::Value::Tuple(second))));
+        assert!(_tuple("(1,2)") == Ok(("", ast::Value::Tuple(third))));
+        assert!(_tuple("(a, e)").unwrap().1 == ast::Value::Tuple(fourth));
+        assert!(_tuple("(a, e, 1)").unwrap().1 == ast::Value::Tuple(fifth));
+        assert!(_tuple("(1, a)").unwrap().1 == ast::Value::Tuple(sixth));
+        assert!(_tuple("(1, 2, a)").unwrap().1 == ast::Value::Tuple(seventh));
+    }
+
+    #[test]
+    fn _tuple_type1() {
+        let mut t = Vec::new();
+        t.push(ast::Type::I32);
+        t.push(ast::Type::Bool);
+        t.push(ast::Type::I32);
+
+        assert!(_tuple_type("(i32)").is_err());
+        assert!(_tuple_type("(i32,)").is_ok());
+        assert!(_tuple_type("(i32, bool, i32)").unwrap().1 == ast::Type::Tuple(t));
     }
 }
