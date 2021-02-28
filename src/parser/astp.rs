@@ -32,18 +32,6 @@ fn function_input(input: &str) -> IResult<&str, ast::Binding> {
     })
 }
 
-#[test]
-fn function_input1() {
-    assert!(
-        function_input("a: i32").unwrap().1
-            == ast::Binding::Declaration(
-                ast::Variable::Named("a".to_string()),
-                ast::Type::I32,
-                false
-            )
-    );
-}
-
 fn function_inputs(input: &str) -> IResult<&str, Vec<ast::Binding>> {
     function_input(input)
         .and_then(|(next_input, res)| {
@@ -65,27 +53,6 @@ fn function_inputs(input: &str) -> IResult<&str, Vec<ast::Binding>> {
         .or_else(|_| Ok((input, Vec::new())))
 }
 
-#[test]
-fn function_inputs1() {
-    let mut t = Vec::new();
-    t.push(ast::Binding::Declaration(
-        ast::Variable::Named("a".to_string()),
-        ast::Type::I32,
-        false,
-    ));
-    t.push(ast::Binding::Declaration(
-        ast::Variable::Named("b".to_string()),
-        ast::Type::I32,
-        false,
-    ));
-    t.push(ast::Binding::Declaration(
-        ast::Variable::Named("c".to_string()),
-        ast::Type::Bool,
-        true,
-    ));
-    assert!(function_inputs("a: i32, b: i32, mut c: bool").unwrap().1 == t);
-}
-
 pub fn precondition(input: &str) -> IResult<&str, ast::Bool> {
     tuple((
         prove_start,
@@ -100,24 +67,6 @@ pub fn precondition(input: &str) -> IResult<&str, ast::Bool> {
     })
 }
 
-#[test]
-fn precondition1() {
-    assert!(precondition("//%precondition false\n").unwrap().1 == ast::Bool::False);
-    assert!(
-        precondition("//%precondition false && true\n").unwrap().1
-            == ast::Bool::And(Box::new(ast::Bool::False), Box::new(ast::Bool::True))
-    );
-    assert!(
-        precondition("//%precondition a == 143\n").unwrap().1
-            == ast::Bool::Equal(
-                ast::Expr::Value(Box::new(ast::Value::Variable(ast::Variable::Named(
-                    "a".to_string()
-                )))),
-                ast::Expr::Number(143)
-            )
-    );
-}
-
 pub fn postcondition(input: &str) -> IResult<&str, ast::Bool> {
     tuple((
         prove_start,
@@ -130,25 +79,6 @@ pub fn postcondition(input: &str) -> IResult<&str, ast::Bool> {
         let (_, _, _, c, _) = res;
         Ok((next_input, *c))
     })
-}
-
-#[test]
-fn postcondition1() {
-    assert!(postcondition("//%postcondition false\n").unwrap().1 == ast::Bool::False);
-    assert!(
-        postcondition("//%postcondition false && true\n").unwrap().1
-            == ast::Bool::And(Box::new(ast::Bool::False), Box::new(ast::Bool::True))
-    );
-
-    assert!(
-        postcondition("//%postcondition a == 143\n").unwrap().1
-            == ast::Bool::Equal(
-                ast::Expr::Value(Box::new(ast::Value::Variable(ast::Variable::Named(
-                    "a".to_string()
-                )))),
-                ast::Expr::Number(143)
-            )
-    );
 }
 
 pub fn function(input: &str) -> IResult<&str, ast::Function> {
@@ -207,121 +137,6 @@ pub fn function(input: &str) -> IResult<&str, ast::Function> {
     })
 }
 
-#[test]
-fn function1() {
-    assert!(function("fn a () {}").unwrap().0 == "");
-    assert!(function("fn a ( ) {}").unwrap().0 == "");
-    assert!(function("fn a ( ) { }").unwrap().0 == "");
-    assert!(function("fn  a  ( ) { }").unwrap().0 == "");
-    assert!(function("fn a () {let a = 14;}").unwrap().0 == "");
-    assert!(function("fn a () {let a = 14; let c = 1 + b;}").unwrap().0 == "");
-    let mut content = Vec::new();
-    content.push(ast::Command::Binding(ast::Binding::Assignment(
-        ast::Variable::Named("a".to_string()),
-        ast::Type::I32,
-        ast::Value::Expr(ast::Expr::Number(14)),
-        false,
-    )));
-    let a = function("fn a () {let a: i32 = 14;}").unwrap().1;
-
-    let b = ast::Function {
-        name: "a".to_string(),
-        content: content,
-        input: Vec::new(),
-        output: ast::Type::Unit,
-        precondition: ast::Bool::True,
-        postcondition: ast::Bool::True,
-    };
-
-    assert!(a == b);
-}
-
-#[test]
-fn function2() {
-    assert!(function("fn a (a: i32) {}").unwrap().0 == "");
-    assert!(function("fn a (b: bool, a:i32 ) {}").unwrap().0 == "");
-    assert!(function("fn a ( ) -> i32{ }").unwrap().0 == "");
-    assert!(function("fn  a  (b: bool ) -> bool{ }").unwrap().0 == "");
-    let mut content = Vec::new();
-    content.push(ast::Command::Binding(ast::Binding::Assignment(
-        ast::Variable::Named("a".to_string()),
-        ast::Type::I32,
-        ast::Value::Expr(ast::Expr::Number(14)),
-        false,
-    )));
-
-    let mut input = Vec::new();
-    input.push(ast::Binding::Declaration(
-        ast::Variable::Named("c".to_string()),
-        ast::Type::I32,
-        false,
-    ));
-    input.push(ast::Binding::Declaration(
-        ast::Variable::Named("d".to_string()),
-        ast::Type::Bool,
-        false,
-    ));
-    let a = function("fn a (c: i32, d: bool) -> bool {let a: i32 = 14;}")
-        .unwrap()
-        .1;
-
-    let b = ast::Function {
-        name: "a".to_string(),
-        content: content,
-        input: input,
-        output: ast::Type::Bool,
-        precondition: ast::Bool::True,
-        postcondition: ast::Bool::True,
-    };
-
-    assert!(a == b);
-}
-
-#[test]
-fn function3() {
-    let mut content = Vec::new();
-    content.push(ast::Command::Binding(ast::Binding::Assignment(
-        ast::Variable::Named("a".to_string()),
-        ast::Type::I32,
-        ast::Value::Expr(ast::Expr::Number(14)),
-        false,
-    )));
-
-    let mut input = Vec::new();
-    input.push(ast::Binding::Declaration(
-        ast::Variable::Named("c".to_string()),
-        ast::Type::I32,
-        false,
-    ));
-    input.push(ast::Binding::Declaration(
-        ast::Variable::Named("d".to_string()),
-        ast::Type::Bool,
-        false,
-    ));
-    let a = function("//%precondition false && false\n//%postcondition (a == 12) && false\n fn a (c: i32, d: bool) -> bool {let a: i32 = 14;}")
-        .unwrap()
-        .1;
-
-    let b = ast::Function {
-        name: "a".to_string(),
-        content: content,
-        input: input,
-        output: ast::Type::Bool,
-        precondition: ast::Bool::And(Box::new(ast::Bool::False), Box::new(ast::Bool::False)),
-        postcondition: ast::Bool::And(
-            Box::new(ast::Bool::Equal(
-                ast::Expr::Value(Box::new(ast::Value::Variable(ast::Variable::Named(
-                    "a".to_string(),
-                )))),
-                ast::Expr::Number(12),
-            )),
-            Box::new(ast::Bool::False),
-        ),
-    };
-
-    assert!(a == b);
-}
-
 pub fn block(input: &str) -> IResult<&str, Vec<ast::Command>> {
     many0(tuple((
         comments,
@@ -360,13 +175,6 @@ fn take_while_not_newline(input: &str) -> IResult<&str, &str> {
     take_while1(|x| x != '\n')(input)
 }
 
-#[test]
-fn take_while_not_newline1() {
-    assert!(take_while_not_newline("ababab\n").unwrap().0 == "\n");
-    assert!(take_while_not_newline("ababab").unwrap().0 == "");
-    assert!(take_while_not_newline("ababab").unwrap().1 == "ababab");
-}
-
 fn single_comment(input: &str) -> IResult<&str, &str> {
     not(command)(input).and_then(|(next_input, _)| {
         tuple((tag("//"), take_while_not_newline, opt(newline)))(next_input).and_then(
@@ -387,24 +195,8 @@ fn multiline_comment(input: &str) -> IResult<&str, &str> {
     })
 }
 
-#[test]
-fn block1() {
-    assert!(block("let x = 1;").unwrap().0 == "");
-    assert!(block("let x = 1;//%assert a < 143\n").unwrap().0 == "");
-}
-
 fn command(input: &str) -> IResult<&str, ast::Command> {
     alt((binding, prove_control, assignment, if_else))(input)
-}
-
-#[test]
-fn command1() {
-    assert!(command("//%assert b == 143 % 4\n").unwrap().0 == "");
-}
-
-#[test]
-fn command2() {
-    assert!(command("let a = 14;").unwrap().0 == "");
 }
 
 fn assignment(input: &str) -> IResult<&str, ast::Command> {
@@ -434,25 +226,6 @@ fn assignment(input: &str) -> IResult<&str, ast::Command> {
         let (_, v, _, _, _, val, _, _) = res;
         Ok((next_input, ast::Command::Assignment(v, val)))
     })
-}
-
-#[test]
-fn assignment1() {
-    assert!(assignment("a = 12;").unwrap().0 == "");
-    assert!(
-        assignment("b = 12;").unwrap().1
-            == ast::Command::Assignment(
-                ast::Variable::Named("b".to_string()),
-                ast::Value::Expr(ast::Expr::Number(12))
-            )
-    );
-    assert!(
-        assignment("b = true;").unwrap().1
-            == ast::Command::Assignment(
-                ast::Variable::Named("b".to_string()),
-                ast::Value::Bool(ast::Bool::True)
-            )
-    );
 }
 
 fn if_else(input: &str) -> IResult<&str, ast::Command> {
@@ -513,94 +286,6 @@ fn if_else(input: &str) -> IResult<&str, ast::Command> {
     })
 }
 
-#[test]
-fn if_else1() {
-    assert!(if_else("if a == 12 {let b = 3;}").unwrap().0 == "");
-    assert!(
-        if_else("if a == 12 {let b = 3;//%assert b == 3\n}")
-            .unwrap()
-            .0
-            == ""
-    );
-}
-
-#[test]
-fn if_else2() {
-    assert!(
-        if_else("if a == 12 {let b = 3;} else if a == 13 {let b = 4;} else {let b = 1;}")
-            .unwrap()
-            .0
-            == ""
-    );
-}
-
-#[test]
-fn if_else3() {
-    let a = if_else("if a == 12 {let b = 3;} else if a == 13 {let b = 4;} else {let b = 1;}")
-        .unwrap()
-        .1;
-
-    let mut conds = Vec::new();
-    let mut comms = Vec::new();
-    let mut comms_1 = Vec::new();
-    let mut comms_2 = Vec::new();
-
-    let mut el = Vec::new();
-
-    conds.push(ast::Bool::Equal(
-        ast::Expr::Value(Box::new(ast::Value::Variable(ast::Variable::Named(
-            "a".to_string(),
-        )))),
-        ast::Expr::Number(12),
-    ));
-
-    conds.push(ast::Bool::Equal(
-        ast::Expr::Value(Box::new(ast::Value::Variable(ast::Variable::Named(
-            "a".to_string(),
-        )))),
-        ast::Expr::Number(13),
-    ));
-
-    comms_1.push(ast::Command::Binding(ast::Binding::Assignment(
-        ast::Variable::Named("b".to_string()),
-        ast::Type::Unknown,
-        ast::Value::Expr(ast::Expr::Number(3)),
-        false,
-    )));
-    comms_2.push(ast::Command::Binding(ast::Binding::Assignment(
-        ast::Variable::Named("b".to_string()),
-        ast::Type::Unknown,
-        ast::Value::Expr(ast::Expr::Number(4)),
-        false,
-    )));
-
-    comms.push(comms_1);
-    comms.push(comms_2);
-
-    el.push(ast::Command::Binding(ast::Binding::Assignment(
-        ast::Variable::Named("b".to_string()),
-        ast::Type::Unknown,
-        ast::Value::Expr(ast::Expr::Number(1)),
-        false,
-    )));
-
-    let b = ast::Command::Block(ast::Block::If(conds, comms, el));
-
-    assert!(a == b);
-}
-
-#[test]
-fn if_else4() {
-    assert!(if_else("if a == 14 {\nlet c = 3;\n}").unwrap().0 == "");
-    assert!(
-        if_else("if a == 14 {\nlet c = 3;\n} else if a == 13 {\n   let c = a + 43;\n}")
-            .unwrap()
-            .0
-            == ""
-    );
-    assert!(if_else("if a == 14 {\nlet c = 3;\n} else if a == 13 {\n   let c = a + 43;\n} else {\n   let c = a + 123;\n}").unwrap().0 == "");
-}
-
 fn single_if(input: &str) -> IResult<&str, ast::Command> {
     tuple((
         tag("if"),
@@ -625,16 +310,6 @@ fn single_if(input: &str) -> IResult<&str, ast::Command> {
     })
 }
 
-fn single_if1() {
-    assert!(single_if("if a == 12 {let b = 3;}").unwrap().0 == "");
-    assert!(
-        single_if("if a == 12 {let b = 3;//%assert b == 3\n}")
-            .unwrap()
-            .0
-            == ""
-    );
-}
-
 fn prove_control(input: &str) -> IResult<&str, ast::Command> {
     alt((assert, assume, loop_invariant))(input)
 }
@@ -651,13 +326,6 @@ fn assert(input: &str) -> IResult<&str, ast::Command> {
     )
 }
 
-#[test]
-fn assert1() {
-    assert!(assert("//%assert 143 == 12\n").is_ok());
-    assert!(assert("//%assert 143 - 4 < 2\n").unwrap().0 == "");
-    assert!(assert("//%assert true\n").unwrap().0 == "");
-}
-
 fn assume(input: &str) -> IResult<&str, ast::Command> {
     tuple((prove_start, tag("assume"), space1, boolean::expr, newline))(input).map(
         |(next_input, res)| {
@@ -668,13 +336,6 @@ fn assume(input: &str) -> IResult<&str, ast::Command> {
             )
         },
     )
-}
-
-#[test]
-fn assume1() {
-    assert!(assume("//%assume 143 == 12\n").is_ok());
-    assert!(assume("//%assume 143 - 4 < 2\n").unwrap().0 == "");
-    assert!(assume("//%assume true\n").unwrap().0 == "");
 }
 
 fn loop_invariant(input: &str) -> IResult<&str, ast::Command> {
@@ -694,21 +355,8 @@ fn loop_invariant(input: &str) -> IResult<&str, ast::Command> {
     })
 }
 
-#[test]
-fn loop_invariant1() {
-    assert!(loop_invariant("//%loop_invariant 143 == 12\n").is_ok());
-    assert!(loop_invariant("//%loop_invariant 143 - 4 < 2\n").unwrap().0 == "");
-    assert!(loop_invariant("//%loop_invariant true\n").unwrap().0 == "");
-}
-
 fn prove_start(input: &str) -> IResult<&str, &str> {
     tag("//%")(input)
-}
-
-#[test]
-fn prove_start1() {
-    assert!(prove_start("//%").unwrap().0 == "");
-    assert!(prove_start("/%").is_err());
 }
 
 pub fn function_name(input: &str) -> IResult<&str, &str> {
@@ -767,13 +415,6 @@ pub fn function_call(input: &str) -> IResult<&str, ast::Value> {
     })
 }
 
-#[test]
-fn function_call1() {
-    assert!(function_call("abba(a, b)").unwrap().0 == "");
-    assert!(function_call("abba(12, a, true)").unwrap().0 == "");
-    assert!(function_call("xd(32, true)").unwrap().0 == "");
-}
-
 pub fn variable_val(input: &str) -> IResult<&str, ast::Value> {
     variable(input).and_then(|(next_input, res)| Ok((next_input, ast::Value::Variable(res))))
 }
@@ -781,27 +422,6 @@ pub fn variable_val(input: &str) -> IResult<&str, ast::Value> {
 pub fn variable(input: &str) -> IResult<&str, ast::Variable> {
     variable_name(input)
         .and_then(|(next_input, res)| Ok((next_input, ast::Variable::Named(res.to_string()))))
-}
-
-#[test]
-fn variable1() {
-    assert!(variable("1").is_err());
-    assert!(variable("a").is_ok());
-    assert!(variable("abc").unwrap().0 == "");
-    assert!(variable("abc").unwrap().1 == ast::Variable::Named("abc".to_string()));
-}
-
-#[test]
-fn variable2() {
-    assert!(variable("_a_b").is_ok());
-    assert!(variable("_a_b_c_").unwrap().0 == "");
-    assert!(variable("_a_b_c_").unwrap().1 == ast::Variable::Named("_a_b_c_".to_string()));
-}
-
-#[test]
-fn variable3() {
-    assert!(variable("true").is_err());
-    assert!(variable("false").is_err());
 }
 
 fn binding(input: &str) -> IResult<&str, ast::Command> {
@@ -846,45 +466,6 @@ fn binding_assignment(input: &str) -> IResult<&str, ast::Command> {
     })
 }
 
-#[test]
-fn binding_assignment1() {
-    assert!(binding_assignment("let x: i32 = 12;").unwrap().0 == "");
-    assert!(binding_assignment("let x = 12 * 4;").unwrap().0 == "");
-    assert!(binding_assignment("let y = 12 - 5 * 6;").unwrap().0 == "");
-    assert!(binding_assignment("let z = 3").is_err());
-    assert!(
-        binding_assignment("let mut z: i32 = 3;").unwrap().1
-            == ast::Command::Binding(ast::Binding::Assignment(
-                ast::Variable::Named("z".to_string()),
-                ast::Type::I32,
-                ast::Value::Expr(ast::Expr::Number(3)),
-                true
-            ))
-    );
-    // This one will be validated later on?
-    // Or can we just assume that the code we are getting is correct Rust?
-    // TODO: run check with rustc before even starting to parse AST on our side.
-    assert!(
-        binding_assignment("let z: bool = 3;").unwrap().1
-            == ast::Command::Binding(ast::Binding::Assignment(
-                ast::Variable::Named("z".to_string()),
-                ast::Type::Bool,
-                ast::Value::Expr(ast::Expr::Number(3)),
-                false
-            ))
-    );
-    assert!(
-        binding_assignment("let z: bool = true;").unwrap().1
-            == ast::Command::Binding(ast::Binding::Assignment(
-                ast::Variable::Named("z".to_string()),
-                ast::Type::Bool,
-                ast::Value::Bool(ast::Bool::True),
-                false
-            ))
-    );
-    assert!(binding_assignment("let c = a + 43;").unwrap().0 == "");
-}
-
 fn binding_declaration(input: &str) -> IResult<&str, ast::Command> {
     tuple((
         space0,
@@ -916,37 +497,6 @@ fn binding_declaration(input: &str) -> IResult<&str, ast::Command> {
     })
 }
 
-#[test]
-fn binding_declaration1() {
-    assert!(binding_declaration("let x: i32;").unwrap().0 == "");
-    assert!(binding_declaration("let x;").unwrap().0 == "");
-    assert!(binding_declaration("let y: bool;").unwrap().0 == "");
-    assert!(
-        binding_declaration("let z:i32;").unwrap().1
-            == ast::Command::Binding(ast::Binding::Declaration(
-                ast::Variable::Named("z".to_string()),
-                ast::Type::I32,
-                false
-            ))
-    );
-    assert!(
-        binding_declaration("let mut z:bool;").unwrap().1
-            == ast::Command::Binding(ast::Binding::Declaration(
-                ast::Variable::Named("z".to_string()),
-                ast::Type::Bool,
-                true
-            ))
-    );
-    assert!(
-        binding_declaration("let x;").unwrap().1
-            == ast::Command::Binding(ast::Binding::Declaration(
-                ast::Variable::Named("x".to_string()),
-                ast::Type::Unknown,
-                false
-            ))
-    );
-}
-
 fn type_def(input: &str) -> IResult<&str, ast::Type> {
     // TODO: handle vector, tuple, etc.
     alt((type_def_bool, type_def_i32))(input)
@@ -958,4 +508,460 @@ fn type_def_bool(input: &str) -> IResult<&str, ast::Type> {
 
 fn type_def_i32(input: &str) -> IResult<&str, ast::Type> {
     tag("i32")(input).and_then(|(next_input, _)| Ok((next_input, ast::Type::I32)))
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn function_input1() {
+        assert!(
+            function_input("a: i32").unwrap().1
+                == ast::Binding::Declaration(
+                    ast::Variable::Named("a".to_string()),
+                    ast::Type::I32,
+                    false
+                )
+        );
+    }
+
+    #[test]
+    fn function_inputs1() {
+        let mut t = Vec::new();
+        t.push(ast::Binding::Declaration(
+            ast::Variable::Named("a".to_string()),
+            ast::Type::I32,
+            false,
+        ));
+        t.push(ast::Binding::Declaration(
+            ast::Variable::Named("b".to_string()),
+            ast::Type::I32,
+            false,
+        ));
+        t.push(ast::Binding::Declaration(
+            ast::Variable::Named("c".to_string()),
+            ast::Type::Bool,
+            true,
+        ));
+        assert!(function_inputs("a: i32, b: i32, mut c: bool").unwrap().1 == t);
+    }
+
+    #[test]
+    fn precondition1() {
+        assert!(precondition("//%precondition false\n").unwrap().1 == ast::Bool::False);
+        assert!(
+            precondition("//%precondition false && true\n").unwrap().1
+                == ast::Bool::And(Box::new(ast::Bool::False), Box::new(ast::Bool::True))
+        );
+        assert!(
+            precondition("//%precondition a == 143\n").unwrap().1
+                == ast::Bool::Equal(
+                    ast::Expr::Value(Box::new(ast::Value::Variable(ast::Variable::Named(
+                        "a".to_string()
+                    )))),
+                    ast::Expr::Number(143)
+                )
+        );
+    }
+
+    #[test]
+    fn postcondition1() {
+        assert!(postcondition("//%postcondition false\n").unwrap().1 == ast::Bool::False);
+        assert!(
+            postcondition("//%postcondition false && true\n").unwrap().1
+                == ast::Bool::And(Box::new(ast::Bool::False), Box::new(ast::Bool::True))
+        );
+
+        assert!(
+            postcondition("//%postcondition a == 143\n").unwrap().1
+                == ast::Bool::Equal(
+                    ast::Expr::Value(Box::new(ast::Value::Variable(ast::Variable::Named(
+                        "a".to_string()
+                    )))),
+                    ast::Expr::Number(143)
+                )
+        );
+    }
+
+    #[test]
+    fn function1() {
+        assert!(function("fn a () {}").unwrap().0 == "");
+        assert!(function("fn a ( ) {}").unwrap().0 == "");
+        assert!(function("fn a ( ) { }").unwrap().0 == "");
+        assert!(function("fn  a  ( ) { }").unwrap().0 == "");
+        assert!(function("fn a () {let a = 14;}").unwrap().0 == "");
+        assert!(function("fn a () {let a = 14; let c = 1 + b;}").unwrap().0 == "");
+        let mut content = Vec::new();
+        content.push(ast::Command::Binding(ast::Binding::Assignment(
+            ast::Variable::Named("a".to_string()),
+            ast::Type::I32,
+            ast::Value::Expr(ast::Expr::Number(14)),
+            false,
+        )));
+        let a = function("fn a () {let a: i32 = 14;}").unwrap().1;
+
+        let b = ast::Function {
+            name: "a".to_string(),
+            content: content,
+            input: Vec::new(),
+            output: ast::Type::Unit,
+            precondition: ast::Bool::True,
+            postcondition: ast::Bool::True,
+        };
+
+        assert!(a == b);
+    }
+
+    #[test]
+    fn function2() {
+        assert!(function("fn a (a: i32) {}").unwrap().0 == "");
+        assert!(function("fn a (b: bool, a:i32 ) {}").unwrap().0 == "");
+        assert!(function("fn a ( ) -> i32{ }").unwrap().0 == "");
+        assert!(function("fn  a  (b: bool ) -> bool{ }").unwrap().0 == "");
+        let mut content = Vec::new();
+        content.push(ast::Command::Binding(ast::Binding::Assignment(
+            ast::Variable::Named("a".to_string()),
+            ast::Type::I32,
+            ast::Value::Expr(ast::Expr::Number(14)),
+            false,
+        )));
+
+        let mut input = Vec::new();
+        input.push(ast::Binding::Declaration(
+            ast::Variable::Named("c".to_string()),
+            ast::Type::I32,
+            false,
+        ));
+        input.push(ast::Binding::Declaration(
+            ast::Variable::Named("d".to_string()),
+            ast::Type::Bool,
+            false,
+        ));
+        let a = function("fn a (c: i32, d: bool) -> bool {let a: i32 = 14;}")
+            .unwrap()
+            .1;
+
+        let b = ast::Function {
+            name: "a".to_string(),
+            content: content,
+            input: input,
+            output: ast::Type::Bool,
+            precondition: ast::Bool::True,
+            postcondition: ast::Bool::True,
+        };
+
+        assert!(a == b);
+    }
+
+    #[test]
+    fn function3() {
+        let mut content = Vec::new();
+        content.push(ast::Command::Binding(ast::Binding::Assignment(
+            ast::Variable::Named("a".to_string()),
+            ast::Type::I32,
+            ast::Value::Expr(ast::Expr::Number(14)),
+            false,
+        )));
+
+        let mut input = Vec::new();
+        input.push(ast::Binding::Declaration(
+            ast::Variable::Named("c".to_string()),
+            ast::Type::I32,
+            false,
+        ));
+        input.push(ast::Binding::Declaration(
+            ast::Variable::Named("d".to_string()),
+            ast::Type::Bool,
+            false,
+        ));
+        let a = function("//%precondition false && false\n//%postcondition (a == 12) && false\n fn a (c: i32, d: bool) -> bool {let a: i32 = 14;}")
+        .unwrap()
+        .1;
+
+        let b = ast::Function {
+            name: "a".to_string(),
+            content: content,
+            input: input,
+            output: ast::Type::Bool,
+            precondition: ast::Bool::And(Box::new(ast::Bool::False), Box::new(ast::Bool::False)),
+            postcondition: ast::Bool::And(
+                Box::new(ast::Bool::Equal(
+                    ast::Expr::Value(Box::new(ast::Value::Variable(ast::Variable::Named(
+                        "a".to_string(),
+                    )))),
+                    ast::Expr::Number(12),
+                )),
+                Box::new(ast::Bool::False),
+            ),
+        };
+
+        assert!(a == b);
+    }
+
+    #[test]
+    fn block1() {
+        assert!(block("let x = 1;").unwrap().0 == "");
+        assert!(block("let x = 1;//%assert a < 143\n").unwrap().0 == "");
+    }
+
+    #[test]
+    fn take_while_not_newline1() {
+        assert!(take_while_not_newline("ababab\n").unwrap().0 == "\n");
+        assert!(take_while_not_newline("ababab").unwrap().0 == "");
+        assert!(take_while_not_newline("ababab").unwrap().1 == "ababab");
+    }
+
+    #[test]
+    fn command1() {
+        assert!(command("//%assert b == 143 % 4\n").unwrap().0 == "");
+    }
+
+    #[test]
+    fn command2() {
+        assert!(command("let a = 14;").unwrap().0 == "");
+    }
+
+    #[test]
+    fn assignment1() {
+        assert!(assignment("a = 12;").unwrap().0 == "");
+        assert!(
+            assignment("b = 12;").unwrap().1
+                == ast::Command::Assignment(
+                    ast::Variable::Named("b".to_string()),
+                    ast::Value::Expr(ast::Expr::Number(12))
+                )
+        );
+        assert!(
+            assignment("b = true;").unwrap().1
+                == ast::Command::Assignment(
+                    ast::Variable::Named("b".to_string()),
+                    ast::Value::Bool(ast::Bool::True)
+                )
+        );
+    }
+
+    #[test]
+    fn if_else1() {
+        assert!(if_else("if a == 12 {let b = 3;}").unwrap().0 == "");
+        assert!(
+            if_else("if a == 12 {let b = 3;//%assert b == 3\n}")
+                .unwrap()
+                .0
+                == ""
+        );
+    }
+
+    #[test]
+    fn if_else2() {
+        assert!(
+            if_else("if a == 12 {let b = 3;} else if a == 13 {let b = 4;} else {let b = 1;}")
+                .unwrap()
+                .0
+                == ""
+        );
+    }
+
+    #[test]
+    fn if_else3() {
+        let a = if_else("if a == 12 {let b = 3;} else if a == 13 {let b = 4;} else {let b = 1;}")
+            .unwrap()
+            .1;
+
+        let mut conds = Vec::new();
+        let mut comms = Vec::new();
+        let mut comms_1 = Vec::new();
+        let mut comms_2 = Vec::new();
+
+        let mut el = Vec::new();
+
+        conds.push(ast::Bool::Equal(
+            ast::Expr::Value(Box::new(ast::Value::Variable(ast::Variable::Named(
+                "a".to_string(),
+            )))),
+            ast::Expr::Number(12),
+        ));
+
+        conds.push(ast::Bool::Equal(
+            ast::Expr::Value(Box::new(ast::Value::Variable(ast::Variable::Named(
+                "a".to_string(),
+            )))),
+            ast::Expr::Number(13),
+        ));
+
+        comms_1.push(ast::Command::Binding(ast::Binding::Assignment(
+            ast::Variable::Named("b".to_string()),
+            ast::Type::Unknown,
+            ast::Value::Expr(ast::Expr::Number(3)),
+            false,
+        )));
+        comms_2.push(ast::Command::Binding(ast::Binding::Assignment(
+            ast::Variable::Named("b".to_string()),
+            ast::Type::Unknown,
+            ast::Value::Expr(ast::Expr::Number(4)),
+            false,
+        )));
+
+        comms.push(comms_1);
+        comms.push(comms_2);
+
+        el.push(ast::Command::Binding(ast::Binding::Assignment(
+            ast::Variable::Named("b".to_string()),
+            ast::Type::Unknown,
+            ast::Value::Expr(ast::Expr::Number(1)),
+            false,
+        )));
+
+        let b = ast::Command::Block(ast::Block::If(conds, comms, el));
+
+        assert!(a == b);
+    }
+
+    #[test]
+    fn if_else4() {
+        assert!(if_else("if a == 14 {\nlet c = 3;\n}").unwrap().0 == "");
+        assert!(
+            if_else("if a == 14 {\nlet c = 3;\n} else if a == 13 {\n   let c = a + 43;\n}")
+                .unwrap()
+                .0
+                == ""
+        );
+        assert!(if_else("if a == 14 {\nlet c = 3;\n} else if a == 13 {\n   let c = a + 43;\n} else {\n   let c = a + 123;\n}").unwrap().0 == "");
+    }
+
+    #[test]
+    fn single_if1() {
+        assert!(single_if("if a == 12 {let b = 3;}").unwrap().0 == "");
+        assert!(
+            single_if("if a == 12 {let b = 3;//%assert b == 3\n}")
+                .unwrap()
+                .0
+                == ""
+        );
+    }
+
+    #[test]
+    fn assert1() {
+        assert!(assert("//%assert 143 == 12\n").is_ok());
+        assert!(assert("//%assert 143 - 4 < 2\n").unwrap().0 == "");
+        assert!(assert("//%assert true\n").unwrap().0 == "");
+    }
+
+    #[test]
+    fn assume1() {
+        assert!(assume("//%assume 143 == 12\n").is_ok());
+        assert!(assume("//%assume 143 - 4 < 2\n").unwrap().0 == "");
+        assert!(assume("//%assume true\n").unwrap().0 == "");
+    }
+
+    #[test]
+    fn loop_invariant1() {
+        assert!(loop_invariant("//%loop_invariant 143 == 12\n").is_ok());
+        assert!(loop_invariant("//%loop_invariant 143 - 4 < 2\n").unwrap().0 == "");
+        assert!(loop_invariant("//%loop_invariant true\n").unwrap().0 == "");
+    }
+
+    #[test]
+    fn prove_start1() {
+        assert!(prove_start("//%").unwrap().0 == "");
+        assert!(prove_start("/%").is_err());
+    }
+
+    #[test]
+    fn function_call1() {
+        assert!(function_call("abba(a, b)").unwrap().0 == "");
+        assert!(function_call("abba(12, a, true)").unwrap().0 == "");
+        assert!(function_call("xd(32, true)").unwrap().0 == "");
+    }
+
+    #[test]
+    fn variable1() {
+        assert!(variable("1").is_err());
+        assert!(variable("a").is_ok());
+        assert!(variable("abc").unwrap().0 == "");
+        assert!(variable("abc").unwrap().1 == ast::Variable::Named("abc".to_string()));
+    }
+
+    #[test]
+    fn variable2() {
+        assert!(variable("_a_b").is_ok());
+        assert!(variable("_a_b_c_").unwrap().0 == "");
+        assert!(variable("_a_b_c_").unwrap().1 == ast::Variable::Named("_a_b_c_".to_string()));
+    }
+
+    #[test]
+    fn variable3() {
+        assert!(variable("true").is_err());
+        assert!(variable("false").is_err());
+    }
+
+    #[test]
+    fn binding_assignment1() {
+        assert!(binding_assignment("let x: i32 = 12;").unwrap().0 == "");
+        assert!(binding_assignment("let x = 12 * 4;").unwrap().0 == "");
+        assert!(binding_assignment("let y = 12 - 5 * 6;").unwrap().0 == "");
+        assert!(binding_assignment("let z = 3").is_err());
+        assert!(
+            binding_assignment("let mut z: i32 = 3;").unwrap().1
+                == ast::Command::Binding(ast::Binding::Assignment(
+                    ast::Variable::Named("z".to_string()),
+                    ast::Type::I32,
+                    ast::Value::Expr(ast::Expr::Number(3)),
+                    true
+                ))
+        );
+        // This one will be validated later on?
+        // Or can we just assume that the code we are getting is correct Rust?
+        // TODO: run check with rustc before even starting to parse AST on our side.
+        assert!(
+            binding_assignment("let z: bool = 3;").unwrap().1
+                == ast::Command::Binding(ast::Binding::Assignment(
+                    ast::Variable::Named("z".to_string()),
+                    ast::Type::Bool,
+                    ast::Value::Expr(ast::Expr::Number(3)),
+                    false
+                ))
+        );
+        assert!(
+            binding_assignment("let z: bool = true;").unwrap().1
+                == ast::Command::Binding(ast::Binding::Assignment(
+                    ast::Variable::Named("z".to_string()),
+                    ast::Type::Bool,
+                    ast::Value::Bool(ast::Bool::True),
+                    false
+                ))
+        );
+        assert!(binding_assignment("let c = a + 43;").unwrap().0 == "");
+    }
+
+    #[test]
+    fn binding_declaration1() {
+        assert!(binding_declaration("let x: i32;").unwrap().0 == "");
+        assert!(binding_declaration("let x;").unwrap().0 == "");
+        assert!(binding_declaration("let y: bool;").unwrap().0 == "");
+        assert!(
+            binding_declaration("let z:i32;").unwrap().1
+                == ast::Command::Binding(ast::Binding::Declaration(
+                    ast::Variable::Named("z".to_string()),
+                    ast::Type::I32,
+                    false
+                ))
+        );
+        assert!(
+            binding_declaration("let mut z:bool;").unwrap().1
+                == ast::Command::Binding(ast::Binding::Declaration(
+                    ast::Variable::Named("z".to_string()),
+                    ast::Type::Bool,
+                    true
+                ))
+        );
+        assert!(
+            binding_declaration("let x;").unwrap().1
+                == ast::Command::Binding(ast::Binding::Declaration(
+                    ast::Variable::Named("x".to_string()),
+                    ast::Type::Unknown,
+                    false
+                ))
+        );
+    }
 }
