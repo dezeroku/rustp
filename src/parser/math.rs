@@ -3,8 +3,9 @@ use crate::ast;
 use crate::parser::astp;
 
 use nom::{
-    bytes::complete::take_while1, character::complete::char, character::complete::one_of,
-    character::complete::space0, multi::many0, sequence::tuple, IResult,
+    branch::alt, bytes::complete::take_while1, character::complete::char,
+    character::complete::one_of, character::complete::space0, multi::many0, sequence::tuple,
+    IResult,
 };
 
 use std::str::FromStr;
@@ -37,7 +38,7 @@ fn digito(input: &str) -> IResult<&str, &str> {
 
 fn primary_expr(input: &str) -> IResult<&str, Box<ast::Expr>> {
     expr_number(input).or_else(|_| {
-        expr_r_variable(input).or_else(|_| {
+        expr_r_value(input).or_else(|_| {
             char('(')(input)
                 .and_then(|(next_input, _)| space0(next_input))
                 .and_then(|(next_input, _)| expr(next_input))
@@ -89,6 +90,10 @@ fn add_expr_right(input: &str) -> IResult<&str, (ast::Opcode, Box<ast::Expr>)> {
     )
 }
 
+pub fn expr_val(input: &str) -> IResult<&str, ast::Value> {
+    expr(input).and_then(|(next_input, res)| Ok((next_input, ast::Value::Expr(*res))))
+}
+
 pub fn expr(input: &str) -> IResult<&str, Box<ast::Expr>> {
     space0(input)
         .and_then(|(next_input, _)| mult_expr(next_input))
@@ -119,9 +124,9 @@ fn expr_number(input: &str) -> IResult<&str, Box<ast::Expr>> {
     }
 }
 
-fn expr_r_variable(input: &str) -> IResult<&str, Box<ast::Expr>> {
-    astp::r_variable(input)
-        .and_then(|(next_input, res)| Ok((next_input, Box::new(ast::Expr::Variable(res)))))
+fn expr_r_value(input: &str) -> IResult<&str, Box<ast::Expr>> {
+    alt((astp::function_call, astp::variable_val))(input)
+        .and_then(|(next_input, res)| Ok((next_input, Box::new(ast::Expr::Value(Box::new(res))))))
 }
 
 fn mult_or_divide_or_mod(input: &str) -> IResult<&str, ast::Opcode> {
@@ -295,7 +300,9 @@ fn expr4() {
             == Box::new(ast::Expr::Op(
                 Box::new(ast::Expr::Number(1)),
                 ast::Opcode::Add,
-                Box::new(ast::Expr::Variable(ast::Variable::Named("x".to_string())))
+                Box::new(ast::Expr::Value(Box::new(ast::Value::Variable(
+                    ast::Variable::Named("x".to_string())
+                ))))
             ))
     );
 }

@@ -5,7 +5,7 @@ pub enum Bool {
     And(Box<Bool>, Box<Bool>),
     Or(Box<Bool>, Box<Bool>),
     Not(Box<Bool>),
-    Variable(Variable),
+    Value(Box<Value>),
     True,
     False,
     Equal(Expr, Expr),
@@ -21,7 +21,7 @@ impl fmt::Display for Bool {
             Bool::And(a, b) => write!(f, "AND: {} {}", a, b),
             Bool::Or(a, b) => write!(f, "OR: {} {}", a, b),
             Bool::Not(a) => write!(f, "NOT: {}", a),
-            Bool::Variable(a) => write!(f, "VAR: {}", a),
+            Bool::Value(a) => write!(f, "VAL: {}", a),
             Bool::True => write!(f, "true"),
             Bool::False => write!(f, "false"),
             Bool::Equal(a, b) => write!(f, "==: {} {}", a, b),
@@ -86,6 +86,9 @@ impl fmt::Display for Type {
 pub enum Value {
     Expr(Expr),
     Bool(Bool),
+    Variable(Variable),
+    // function name, arguments, output type
+    FunctionCall(String, Vec<Value>),
 }
 
 impl fmt::Display for Value {
@@ -93,6 +96,10 @@ impl fmt::Display for Value {
         match self {
             Value::Expr(expr) => write!(f, "{}", expr),
             Value::Bool(val) => write!(f, "{}", val),
+            Value::Variable(var) => write!(f, "{}", var),
+            Value::FunctionCall(name, input) => {
+                write!(f, "FunctionCall({}, {:?})", name, input)
+            }
         }
     }
 }
@@ -140,9 +147,6 @@ impl fmt::Display for Binding {
 #[derive(PartialEq, Clone, Debug)]
 pub enum Variable {
     Named(String),
-    Value(Box<Value>),
-    // function name, arguments, output type
-    FunctionCall(String, Vec<Variable>),
     // TODO: add definition for accessing array/tuple elements
 }
 
@@ -150,10 +154,6 @@ impl fmt::Display for Variable {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Variable::Named(x) => write!(f, "Named({})", x),
-            Variable::Value(x) => write!(f, "Value({})", x),
-            Variable::FunctionCall(name, input) => {
-                write!(f, "FunctionCall({}, {:?})", name, input)
-            }
         }
     }
 }
@@ -161,7 +161,7 @@ impl fmt::Display for Variable {
 #[derive(PartialEq, Clone, Debug)]
 pub enum Expr {
     Number(i32),
-    Variable(Variable),
+    Value(Box<Value>),
     Op(Box<Expr>, Opcode, Box<Expr>),
 }
 
@@ -170,7 +170,7 @@ impl fmt::Display for Expr {
         match self {
             Expr::Number(x) => write!(f, "{}", x),
             Expr::Op(a, o, b) => write!(f, "({} {} {})", o, a, b),
-            Expr::Variable(x) => write!(f, "{}", x),
+            Expr::Value(x) => write!(f, "{}", x),
         }
     }
 }

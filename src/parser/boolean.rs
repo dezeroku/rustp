@@ -55,6 +55,10 @@ fn add_expr_right(input: &str) -> IResult<&str, Box<ast::Bool>> {
     })
 }
 
+pub fn expr_val(input: &str) -> IResult<&str, ast::Value> {
+    expr(input).and_then(|(next_input, res)| Ok((next_input, ast::Value::Bool(*res))))
+}
+
 pub fn expr(input: &str) -> IResult<&str, Box<ast::Bool>> {
     space0(input)
         .and_then(|(next_input, _)| mult_expr(next_input))
@@ -102,9 +106,13 @@ fn expr3() {
             == Box::new(ast::Bool::And(
                 Box::new(ast::Bool::True),
                 Box::new(ast::Bool::Equal(
-                    ast::Expr::Variable(ast::Variable::Named("a".to_string())),
+                    ast::Expr::Value(Box::new(ast::Value::Variable(ast::Variable::Named(
+                        "a".to_string()
+                    )))),
                     ast::Expr::Op(
-                        Box::new(ast::Expr::Variable(ast::Variable::Named("b".to_string()))),
+                        Box::new(ast::Expr::Value(Box::new(ast::Value::Variable(
+                            ast::Variable::Named("b".to_string())
+                        )))),
                         ast::Opcode::Add,
                         Box::new(ast::Expr::Number(3))
                     )
@@ -117,13 +125,13 @@ fn factor(input: &str) -> IResult<&str, Box<ast::Bool>> {
     alt((factor_compare, factor_id, factor_not, factor_paren))(input)
 }
 
-fn variable(input: &str) -> IResult<&str, Box<ast::Bool>> {
-    astp::variable(input)
-        .and_then(|(next_input, res)| Ok((next_input, Box::new(ast::Bool::Variable(res)))))
+fn expr_r_value(input: &str) -> IResult<&str, Box<ast::Bool>> {
+    alt((astp::function_call, astp::variable_val))(input)
+        .and_then(|(next_input, res)| Ok((next_input, Box::new(ast::Bool::Value(Box::new(res))))))
 }
 
 fn factor_id(input: &str) -> IResult<&str, Box<ast::Bool>> {
-    alt((_true, _false, variable))(input)
+    alt((_true, _false, expr_r_value))(input)
 }
 
 #[test]
@@ -205,9 +213,13 @@ fn factor_compare_equal1() {
     assert!(
         factor_compare_equal("a == (b + 3)").unwrap().1
             == Box::new(ast::Bool::Equal(
-                ast::Expr::Variable(ast::Variable::Named("a".to_string())),
+                ast::Expr::Value(Box::new(ast::Value::Variable(ast::Variable::Named(
+                    "a".to_string()
+                )))),
                 ast::Expr::Op(
-                    Box::new(ast::Expr::Variable(ast::Variable::Named("b".to_string()))),
+                    Box::new(ast::Expr::Value(Box::new(ast::Value::Variable(
+                        ast::Variable::Named("b".to_string())
+                    )))),
                     ast::Opcode::Add,
                     Box::new(ast::Expr::Number(3))
                 )
@@ -224,13 +236,16 @@ fn factor_compare_greater_equal1() {
                 ast::Expr::Number(43)
             ))
     );
-
     assert!(
         factor_compare_greater_equal("a >= (b + 3)").unwrap().1
             == Box::new(ast::Bool::GreaterEqual(
-                ast::Expr::Variable(ast::Variable::Named("a".to_string())),
+                ast::Expr::Value(Box::new(ast::Value::Variable(ast::Variable::Named(
+                    "a".to_string()
+                )))),
                 ast::Expr::Op(
-                    Box::new(ast::Expr::Variable(ast::Variable::Named("b".to_string()))),
+                    Box::new(ast::Expr::Value(Box::new(ast::Value::Variable(
+                        ast::Variable::Named("b".to_string())
+                    )))),
                     ast::Opcode::Add,
                     Box::new(ast::Expr::Number(3))
                 )
@@ -251,9 +266,13 @@ fn factor_compare_smaller_equal1() {
     assert!(
         factor_compare_smaller_equal("a <= (b + 3)").unwrap().1
             == Box::new(ast::Bool::SmallerEqual(
-                ast::Expr::Variable(ast::Variable::Named("a".to_string())),
+                ast::Expr::Value(Box::new(ast::Value::Variable(ast::Variable::Named(
+                    "a".to_string()
+                )))),
                 ast::Expr::Op(
-                    Box::new(ast::Expr::Variable(ast::Variable::Named("b".to_string()))),
+                    Box::new(ast::Expr::Value(Box::new(ast::Value::Variable(
+                        ast::Variable::Named("b".to_string())
+                    )))),
                     ast::Opcode::Add,
                     Box::new(ast::Expr::Number(3))
                 )
@@ -274,9 +293,13 @@ fn factor_compare_greater1() {
     assert!(
         factor_compare_greater("a > (b + 3)").unwrap().1
             == Box::new(ast::Bool::Greater(
-                ast::Expr::Variable(ast::Variable::Named("a".to_string())),
+                ast::Expr::Value(Box::new(ast::Value::Variable(ast::Variable::Named(
+                    "a".to_string()
+                )))),
                 ast::Expr::Op(
-                    Box::new(ast::Expr::Variable(ast::Variable::Named("b".to_string()))),
+                    Box::new(ast::Expr::Value(Box::new(ast::Value::Variable(
+                        ast::Variable::Named("b".to_string())
+                    )))),
                     ast::Opcode::Add,
                     Box::new(ast::Expr::Number(3))
                 )
@@ -297,9 +320,13 @@ fn factor_compare_smaller1() {
     assert!(
         factor_compare_smaller("a < (b + 3)").unwrap().1
             == Box::new(ast::Bool::Smaller(
-                ast::Expr::Variable(ast::Variable::Named("a".to_string())),
+                ast::Expr::Value(Box::new(ast::Value::Variable(ast::Variable::Named(
+                    "a".to_string()
+                )))),
                 ast::Expr::Op(
-                    Box::new(ast::Expr::Variable(ast::Variable::Named("b".to_string()))),
+                    Box::new(ast::Expr::Value(Box::new(ast::Value::Variable(
+                        ast::Variable::Named("b".to_string())
+                    )))),
                     ast::Opcode::Add,
                     Box::new(ast::Expr::Number(3))
                 )
@@ -328,9 +355,9 @@ fn factor_paren_1() {
     );
     assert!(
         factor_paren("(!a)").unwrap().1
-            == Box::new(ast::Bool::Not(Box::new(ast::Bool::Variable(
-                ast::Variable::Named("a".to_string())
-            ))))
+            == Box::new(ast::Bool::Not(Box::new(ast::Bool::Value(Box::new(
+                ast::Value::Variable(ast::Variable::Named("a".to_string()))
+            )))))
     );
 }
 

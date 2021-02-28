@@ -10,7 +10,7 @@ let mut a: i32 = 14;
 //%assert a == 14
 //%assume b %2 == 1
 
-a = xd(a, lc);
+a = xd(a, lc, true, 12, 143);
 /*
 this
 also

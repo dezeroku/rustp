@@ -9,6 +9,8 @@ use nom::{
     multi::many0, sequence::tuple, IResult,
 };
 
+static KEYWORDS: [&'static str; 6] = ["let", "true", "false", "&&", "||", "!"];
+
 fn function_input(input: &str) -> IResult<&str, ast::Binding> {
     tuple((
         space0,
@@ -108,7 +110,9 @@ fn precondition1() {
     assert!(
         precondition("//%precondition a == 143\n").unwrap().1
             == ast::Bool::Equal(
-                ast::Expr::Variable(ast::Variable::Named("a".to_string())),
+                ast::Expr::Value(Box::new(ast::Value::Variable(ast::Variable::Named(
+                    "a".to_string()
+                )))),
                 ast::Expr::Number(143)
             )
     );
@@ -139,7 +143,9 @@ fn postcondition1() {
     assert!(
         postcondition("//%postcondition a == 143\n").unwrap().1
             == ast::Bool::Equal(
-                ast::Expr::Variable(ast::Variable::Named("a".to_string())),
+                ast::Expr::Value(Box::new(ast::Value::Variable(ast::Variable::Named(
+                    "a".to_string()
+                )))),
                 ast::Expr::Number(143)
             )
     );
@@ -304,7 +310,9 @@ fn function3() {
         precondition: ast::Bool::And(Box::new(ast::Bool::False), Box::new(ast::Bool::False)),
         postcondition: ast::Bool::And(
             Box::new(ast::Bool::Equal(
-                ast::Expr::Variable(ast::Variable::Named("a".to_string())),
+                ast::Expr::Value(Box::new(ast::Value::Variable(ast::Variable::Named(
+                    "a".to_string(),
+                )))),
                 ast::Expr::Number(12),
             )),
             Box::new(ast::Bool::False),
@@ -407,7 +415,7 @@ fn assignment(input: &str) -> IResult<&str, ast::Command> {
             space0,
             tag("="),
             space0,
-            value_bool,
+            boolean::expr_val,
             space0,
             tag(";"),
         )),
@@ -417,7 +425,7 @@ fn assignment(input: &str) -> IResult<&str, ast::Command> {
             space0,
             tag("="),
             space0,
-            value_expr,
+            math::expr_val,
             space0,
             tag(";"),
         )),
@@ -540,12 +548,16 @@ fn if_else3() {
     let mut el = Vec::new();
 
     conds.push(ast::Bool::Equal(
-        ast::Expr::Variable(ast::Variable::Named("a".to_string())),
+        ast::Expr::Value(Box::new(ast::Value::Variable(ast::Variable::Named(
+            "a".to_string(),
+        )))),
         ast::Expr::Number(12),
     ));
 
     conds.push(ast::Bool::Equal(
-        ast::Expr::Variable(ast::Variable::Named("a".to_string())),
+        ast::Expr::Value(Box::new(ast::Value::Variable(ast::Variable::Named(
+            "a".to_string(),
+        )))),
         ast::Expr::Number(13),
     ));
 
@@ -708,26 +720,36 @@ pub fn function_name(input: &str) -> IResult<&str, &str> {
 fn variable_name(input: &str) -> IResult<&str, &str> {
     let l = |x: char| char::is_alphabetic(x) || '_' == x;
 
-    take_while1(l)(input).and_then(|(next_input, res)| Ok((next_input, res)))
+    take_while1(l)(input).and_then(|(next_input, res)| {
+        // if matches then fail
+        if !KEYWORDS.contains(&res) {
+            Ok((next_input, res))
+        } else {
+            Err((nom::Err::Error(nom::error::Error::new(res, nom::error::ErrorKind::Tag))))
+        }
+    })
 }
 
 /// Defines everything what can be used on the right side of an assignment or binding.
-pub fn r_variable(input: &str) -> IResult<&str, ast::Variable> {
-    // TODO: REQUIRED: allow both mathematical and boolean expressions to be used here
-    // TODO: probably also rename this to r_value?
-    // define a common type for RValue and use it in both booleans and expressions?
-    // It can be tricky to figure out if types are OK later on
-    alt((function_call, variable))(input)
+pub fn r_value(input: &str) -> IResult<&str, ast::Value> {
+    // TODO: this will be problematic due to possibility of boolean and math expr_val consuming same input, just in a different level
+    // handle it somehow based on the length of input matched?
+    alt((
+        function_call,
+        variable_val,
+        math::expr_val,
+        boolean::expr_val,
+    ))(input)
 }
 
-fn function_call(input: &str) -> IResult<&str, ast::Variable> {
+pub fn function_call(input: &str) -> IResult<&str, ast::Value> {
     tuple((
         function_name,
         space0,
         tag("("),
         space0,
-        r_variable,
-        many0(tuple((space0, tag(","), space0, r_variable))),
+        r_value,
+        many0(tuple((space0, tag(","), space0, r_value))),
         space0,
         tag(")"),
     ))(input)
@@ -741,7 +763,7 @@ fn function_call(input: &str) -> IResult<&str, ast::Variable> {
             t.push(i);
         }
 
-        Ok((next_input, ast::Variable::FunctionCall(n.to_string(), t)))
+        Ok((next_input, ast::Value::FunctionCall(n.to_string(), t)))
     })
 }
 
@@ -750,6 +772,10 @@ fn function_call1() {
     assert!(function_call("abba(a, b)").unwrap().0 == "");
     assert!(function_call("abba(12, a, true)").unwrap().0 == "");
     assert!(function_call("xd(32, true)").unwrap().0 == "");
+}
+
+pub fn variable_val(input: &str) -> IResult<&str, ast::Value> {
+    variable(input).and_then(|(next_input, res)| Ok((next_input, ast::Value::Variable(res))))
 }
 
 pub fn variable(input: &str) -> IResult<&str, ast::Variable> {
@@ -772,25 +798,18 @@ fn variable2() {
     assert!(variable("_a_b_c_").unwrap().1 == ast::Variable::Named("_a_b_c_".to_string()));
 }
 
+#[test]
+fn variable3() {
+    assert!(variable("true").is_err());
+    assert!(variable("false").is_err());
+}
+
 fn binding(input: &str) -> IResult<&str, ast::Command> {
     alt((binding_assignment, binding_declaration))(input)
 }
 
 fn value(input: &str) -> IResult<&str, ast::Value> {
-    alt((value_bool, value_expr))(input)
-}
-
-fn value_bool(input: &str) -> IResult<&str, ast::Value> {
-    boolean::expr(input).and_then(|(next_input, res)| Ok((next_input, ast::Value::Bool(*res))))
-}
-
-fn value_expr(input: &str) -> IResult<&str, ast::Value> {
-    math::expr(input).and_then(|(next_input, res)| Ok((next_input, ast::Value::Expr(*res))))
-}
-
-#[test]
-fn value_expr1() {
-    assert!(value_expr("xd(12, true)").unwrap().0 == "");
+    alt((boolean::expr_val, math::expr_val))(input)
 }
 
 fn binding_assignment(input: &str) -> IResult<&str, ast::Command> {
@@ -803,8 +822,8 @@ fn binding_assignment(input: &str) -> IResult<&str, ast::Command> {
         space0,
         opt(tuple((char(':'), space0, type_def, space0))),
         alt((
-            tuple((char('='), space0, value_bool, space0, char(';'))),
-            tuple((char('='), space0, value_expr, space0, char(';'))),
+            tuple((char('='), space0, boolean::expr_val, space0, char(';'))),
+            tuple((char('='), space0, math::expr_val, space0, char(';'))),
         )),
     ))(input)
     .and_then(|(next_input, x)| {
