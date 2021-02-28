@@ -85,6 +85,8 @@ pub enum Value {
     Expr(Expr),
     Bool(Bool),
     Variable(Variable),
+    Tuple(Vec<Value>),
+    Array(Vec<Value>),
     // function name, arguments, output type
     FunctionCall(String, Vec<Value>),
 }
@@ -95,6 +97,8 @@ impl fmt::Display for Value {
             Value::Expr(expr) => write!(f, "{}", expr),
             Value::Bool(val) => write!(f, "{}", val),
             Value::Variable(var) => write!(f, "{}", var),
+            Value::Tuple(tup) => write!(f, "{:?}", tup),
+            Value::Array(arr) => write!(f, "{:?}", arr),
             Value::FunctionCall(name, input) => {
                 write!(f, "FunctionCall({}, {:?})", name, input)
             }
