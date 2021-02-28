@@ -37,7 +37,7 @@ fn digito(input: &str) -> IResult<&str, &str> {
 
 fn primary_expr(input: &str) -> IResult<&str, Box<ast::Expr>> {
     expr_number(input).or_else(|_| {
-        expr_variable(input).or_else(|_| {
+        expr_r_variable(input).or_else(|_| {
             char('(')(input)
                 .and_then(|(next_input, _)| space0(next_input))
                 .and_then(|(next_input, _)| expr(next_input))
@@ -119,8 +119,8 @@ fn expr_number(input: &str) -> IResult<&str, Box<ast::Expr>> {
     }
 }
 
-fn expr_variable(input: &str) -> IResult<&str, Box<ast::Expr>> {
-    astp::variable(input)
+fn expr_r_variable(input: &str) -> IResult<&str, Box<ast::Expr>> {
+    astp::r_variable(input)
         .and_then(|(next_input, res)| Ok((next_input, Box::new(ast::Expr::Variable(res)))))
 }
 

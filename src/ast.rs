@@ -142,7 +142,8 @@ pub enum Variable {
     Named(String),
     Value(Box<Value>),
     // function name, arguments, output type
-    FunctionCall(String, Vec<Variable>, Type),
+    FunctionCall(String, Vec<Variable>),
+    // TODO: add definition for accessing array/tuple elements
 }
 
 impl fmt::Display for Variable {
@@ -150,8 +151,8 @@ impl fmt::Display for Variable {
         match self {
             Variable::Named(x) => write!(f, "Named({})", x),
             Variable::Value(x) => write!(f, "Value({})", x),
-            Variable::FunctionCall(name, input, t) => {
-                write!(f, "FunctionCall({}, {:?}, {})", name, input, t)
+            Variable::FunctionCall(name, input) => {
+                write!(f, "FunctionCall({}, {:?})", name, input)
             }
         }
     }

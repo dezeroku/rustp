@@ -711,9 +711,47 @@ fn variable_name(input: &str) -> IResult<&str, &str> {
     take_while1(l)(input).and_then(|(next_input, res)| Ok((next_input, res)))
 }
 
-// TODO:
-// probably this has to be split to r_variable, so function calls also could be used on right
-// sight of the assignment
+/// Defines everything what can be used on the right side of an assignment or binding.
+pub fn r_variable(input: &str) -> IResult<&str, ast::Variable> {
+    // TODO: REQUIRED: allow both mathematical and boolean expressions to be used here
+    // TODO: probably also rename this to r_value?
+    // define a common type for RValue and use it in both booleans and expressions?
+    // It can be tricky to figure out if types are OK later on
+    alt((function_call, variable))(input)
+}
+
+fn function_call(input: &str) -> IResult<&str, ast::Variable> {
+    tuple((
+        function_name,
+        space0,
+        tag("("),
+        space0,
+        r_variable,
+        many0(tuple((space0, tag(","), space0, r_variable))),
+        space0,
+        tag(")"),
+    ))(input)
+    .and_then(|(next_input, res)| {
+        let (n, _, _, _, v, a, _, _) = res;
+        let mut t = Vec::new();
+        t.push(v);
+
+        for item in a {
+            let (_, _, _, i) = item;
+            t.push(i);
+        }
+
+        Ok((next_input, ast::Variable::FunctionCall(n.to_string(), t)))
+    })
+}
+
+#[test]
+fn function_call1() {
+    assert!(function_call("abba(a, b)").unwrap().0 == "");
+    assert!(function_call("abba(12, a, true)").unwrap().0 == "");
+    assert!(function_call("xd(32, true)").unwrap().0 == "");
+}
+
 pub fn variable(input: &str) -> IResult<&str, ast::Variable> {
     variable_name(input)
         .and_then(|(next_input, res)| Ok((next_input, ast::Variable::Named(res.to_string()))))
@@ -748,6 +786,11 @@ fn value_bool(input: &str) -> IResult<&str, ast::Value> {
 
 fn value_expr(input: &str) -> IResult<&str, ast::Value> {
     math::expr(input).and_then(|(next_input, res)| Ok((next_input, ast::Value::Expr(*res))))
+}
+
+#[test]
+fn value_expr1() {
+    assert!(value_expr("xd(12, true)").unwrap().0 == "");
 }
 
 fn binding_assignment(input: &str) -> IResult<&str, ast::Command> {
