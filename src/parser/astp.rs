@@ -214,6 +214,16 @@ fn assignment(input: &str) -> IResult<&str, ast::Command> {
             space0,
             tag("="),
             space0,
+            array_content,
+            space0,
+            tag(";"),
+        )),
+        tuple((
+            space0,
+            variable,
+            space0,
+            tag("="),
+            space0,
             _tuple,
             space0,
             tag(";"),
@@ -462,8 +472,23 @@ pub fn variable_val(input: &str) -> IResult<&str, ast::Value> {
 }
 
 pub fn variable(input: &str) -> IResult<&str, ast::Variable> {
+    alt((variable_array_elem, variable_single))(input)
+}
+
+fn variable_single(input: &str) -> IResult<&str, ast::Variable> {
     variable_name(input)
         .and_then(|(next_input, res)| Ok((next_input, ast::Variable::Named(res.to_string()))))
+}
+
+fn variable_array_elem(input: &str) -> IResult<&str, ast::Variable> {
+    tuple((variable_name, char('['), r_value, char(']')))(input).and_then(
+        |(next_input, (v, _, i, _))| {
+            Ok((
+                next_input,
+                ast::Variable::ArrayElem(v.to_string(), Box::new(i)),
+            ))
+        },
+    )
 }
 
 fn binding(input: &str) -> IResult<&str, ast::Command> {
@@ -529,6 +554,7 @@ fn binding_assignment(input: &str) -> IResult<&str, ast::Command> {
         space0,
         opt(tuple((char(':'), space0, type_def, space0))),
         alt((
+            tuple((char('='), space0, array_content, space0, char(';'))),
             tuple((char('='), space0, _tuple, space0, char(';'))),
             tuple((char('='), space0, boolean::expr_val, space0, char(';'))),
             tuple((char('='), space0, math::expr_val, space0, char(';'))),
@@ -582,6 +608,27 @@ fn binding_declaration(input: &str) -> IResult<&str, ast::Command> {
                 ast::Command::Binding(ast::Binding::Declaration(v, ast::Type::Unknown, mu)),
             )),
         }
+    })
+}
+
+fn array_content(input: &str) -> IResult<&str, ast::Value> {
+    tuple((
+        char('['),
+        space0,
+        r_value,
+        space0,
+        many0(tuple((char(','), space0, r_value))),
+        space0,
+        char(']'),
+    ))(input)
+    .and_then(|(next_input, (_, _, v, _, r, _, _))| {
+        let mut result = Vec::new();
+        result.push(v);
+        for (_, _, i) in r {
+            result.push(i);
+        }
+
+        Ok((next_input, ast::Value::Array(result)))
     })
 }
 
@@ -694,9 +741,25 @@ fn _tuple(input: &str) -> IResult<&str, ast::Value> {
     })
 }
 
+fn array_type(input: &str) -> IResult<&str, ast::Type> {
+    tuple((
+        char('['),
+        space0,
+        type_def_single,
+        space0,
+        char(';'),
+        space0,
+        math::number,
+        space0,
+        char(']'),
+    ))(input)
+    .and_then(|(next_input, (_, _, t, _, _, _, i, _, _))| {
+        Ok((next_input, ast::Type::Array(Box::new(t), i)))
+    })
+}
+
 fn type_def(input: &str) -> IResult<&str, ast::Type> {
-    // TODO: handle array
-    alt((_tuple_type, type_def_single))(input)
+    alt((array_type, _tuple_type, type_def_single))(input)
 }
 
 fn type_def_single(input: &str) -> IResult<&str, ast::Type> {
@@ -924,6 +987,28 @@ mod test {
     }
 
     #[test]
+    fn array_content1() {
+        assert!(array_content("[1,]").is_err());
+        assert!(array_content("[1,2]").unwrap().0 == "");
+        let mut temp = Vec::new();
+        temp.push(ast::Value::Expr(ast::Expr::Number(1)));
+        temp.push(ast::Value::Expr(ast::Expr::Number(2)));
+        temp.push(ast::Value::Expr(ast::Expr::Number(4)));
+
+        assert!(array_content("[1,2, 4]").unwrap().1 == ast::Value::Array(temp));
+    }
+
+    #[test]
+    fn array_type1() {
+        assert!(array_type("[i32,]").is_err());
+        assert!(array_type("[i32;]").is_err());
+        assert!(array_type("[i32;4]").unwrap().1 == ast::Type::Array(Box::new(ast::Type::I32), 4));
+        assert!(
+            array_type("[bool;4]").unwrap().1 == ast::Type::Array(Box::new(ast::Type::Bool), 4)
+        );
+    }
+
+    #[test]
     fn assignment1() {
         assert!(assignment("a = 12;").unwrap().0 == "");
         assert!(
@@ -941,6 +1026,33 @@ mod test {
                 )
         );
         assert!(assignment("a = (12, false, a);").unwrap().0 == "");
+    }
+
+    #[test]
+    fn assignment2() {
+        assert!(assignment("a[1] = 12;").unwrap().0 == "");
+        assert!(
+            assignment("b[3] = 12;").unwrap().1
+                == ast::Command::Assignment(
+                    ast::Variable::ArrayElem(
+                        "b".to_string(),
+                        Box::new(ast::Value::Expr(ast::Expr::Number(3)))
+                    ),
+                    ast::Value::Expr(ast::Expr::Number(12))
+                )
+        );
+
+        let mut temp = Vec::new();
+        temp.push(ast::Value::Expr(ast::Expr::Number(12)));
+        temp.push(ast::Value::Expr(ast::Expr::Number(3)));
+        temp.push(ast::Value::Expr(ast::Expr::Number(1)));
+        assert!(
+            assignment("b = [12, 3, 1];").unwrap().1
+                == ast::Command::Assignment(
+                    ast::Variable::Named("b".to_string(),),
+                    ast::Value::Array(temp)
+                )
+        );
     }
 
     #[test]
@@ -1130,6 +1242,34 @@ mod test {
     }
 
     #[test]
+    fn variable_4() {
+        assert!(variable("a[]").unwrap().0 == "[]");
+        assert!(variable("a[1]").is_ok());
+        assert!(variable("abc[a]").unwrap().0 == "");
+        assert!(
+            variable("abc[c]").unwrap().1
+                == ast::Variable::ArrayElem(
+                    "abc".to_string(),
+                    Box::new(ast::Value::Variable(ast::Variable::Named("c".to_string())))
+                )
+        );
+    }
+
+    #[test]
+    fn variable_array_elem1() {
+        assert!(variable_array_elem("a[]").is_err());
+        assert!(variable_array_elem("a[1]").is_ok());
+        assert!(variable_array_elem("abc[a]").unwrap().0 == "");
+        assert!(
+            variable_array_elem("abc[c]").unwrap().1
+                == ast::Variable::ArrayElem(
+                    "abc".to_string(),
+                    Box::new(ast::Value::Variable(ast::Variable::Named("c".to_string())))
+                )
+        );
+    }
+
+    #[test]
     fn binding_assignment1() {
         assert!(binding_assignment("let x: i32 = 12;").unwrap().0 == "");
         assert!(binding_assignment("let x = 12 * 4;").unwrap().0 == "");
@@ -1171,6 +1311,72 @@ mod test {
                 .unwrap()
                 .0
                 == ""
+        );
+    }
+
+    #[test]
+    fn binding_assigment2() {
+        let mut temp = Vec::new();
+        temp.push(ast::Value::Expr(ast::Expr::Number(1)));
+        temp.push(ast::Value::Expr(ast::Expr::Number(2)));
+        temp.push(ast::Value::Expr(ast::Expr::Number(4)));
+
+        assert!(
+            binding_assignment("let x = [1,2, 4];").unwrap().1
+                == ast::Command::Binding(ast::Binding::Assignment(
+                    ast::Variable::Named("x".to_string()),
+                    ast::Type::Unknown,
+                    ast::Value::Array(temp),
+                    false
+                ))
+        );
+
+        let mut temp = Vec::new();
+        temp.push(ast::Value::Expr(ast::Expr::Number(1)));
+        temp.push(ast::Value::Expr(ast::Expr::Number(2)));
+        temp.push(ast::Value::Expr(ast::Expr::Number(4)));
+
+        assert!(
+            binding_assignment("let mut x = [1,2, 4];").unwrap().1
+                == ast::Command::Binding(ast::Binding::Assignment(
+                    ast::Variable::Named("x".to_string()),
+                    ast::Type::Unknown,
+                    ast::Value::Array(temp),
+                    true
+                ))
+        );
+
+        let mut temp = Vec::new();
+        temp.push(ast::Value::Expr(ast::Expr::Number(1)));
+        temp.push(ast::Value::Expr(ast::Expr::Number(2)));
+        temp.push(ast::Value::Expr(ast::Expr::Number(4)));
+
+        assert!(
+            binding_assignment("let mut x = [1,2, 4];").unwrap().1
+                == ast::Command::Binding(ast::Binding::Assignment(
+                    ast::Variable::Named("x".to_string()),
+                    ast::Type::Unknown,
+                    ast::Value::Array(temp),
+                    true
+                ))
+        );
+    }
+
+    #[test]
+    fn binding_assigment3() {
+        let mut temp = Vec::new();
+        temp.push(ast::Value::Expr(ast::Expr::Number(1)));
+        temp.push(ast::Value::Expr(ast::Expr::Number(2)));
+        temp.push(ast::Value::Expr(ast::Expr::Number(4)));
+
+        assert!(
+            binding_assignment("let x: [i32; 3] = [1,2, 4];").unwrap().1
+                == ast::Command::Binding(ast::Binding::Assignment(
+                    ast::Variable::Named("x".to_string()),
+                    ast::Type::Array(Box::new(ast::Type::I32), 3),
+                    ast::Value::Array(temp),
+                    false
+                ))
         );
     }
 

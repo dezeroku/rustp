@@ -1,14 +1,18 @@
 //%precondition b % 4 == 2
 //%postcondition c - 2 == 1
 fn a (b: i32, c:bool, a: i32 ) -> bool {
+let mut temp: [i32; 4] = [1,2,3, 4];
+let x_d = temp;
 let mut a: i32 = 14;
 
+let lol = x_d[a];
 // just ignore me
 
 // the one below is not to be ignored
 //the one below is not to be ignored
 //%assert a == 14
 //%assume b %2 == 1
+
 
 let b: (bool, i32) = (true, 12);
 //let (c, _)  = b;

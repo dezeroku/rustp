@@ -157,6 +157,8 @@ pub enum Variable {
     Named(String),
     /// Just a _ equivalent
     Empty, // TODO: add definition for accessing array/tuple elements
+    /// array name, index
+    ArrayElem(String, Box<Value>),
 }
 
 impl fmt::Display for Variable {
@@ -164,6 +166,7 @@ impl fmt::Display for Variable {
         match self {
             Variable::Named(x) => write!(f, "Named({})", x),
             Variable::Empty => write!(f, "_"),
+            Variable::ArrayElem(a, i) => write!(f, "{}[{}]", a, i),
         }
     }
 }

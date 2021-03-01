@@ -146,7 +146,7 @@ fn add_or_subtract(input: &str) -> IResult<&str, ast::Opcode> {
     }
 }
 
-fn number(input: &str) -> IResult<&str, i32> {
+pub fn number(input: &str) -> IResult<&str, i32> {
     let t = digito(input);
     match t {
         Ok(a) => {
