@@ -11,6 +11,8 @@ let mut a: i32 = 14;
 //%assume b %2 == 1
 
 let b: (bool, i32) = (true, 12);
+//let (c, _)  = b;
+let (c, _)  = (true, 13);
 a = xd(a, lc, true, 12, 143);
 /*
 this

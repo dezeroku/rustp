@@ -110,6 +110,8 @@ impl fmt::Display for Value {
 #[derive(PartialEq, Clone, Debug)]
 pub enum Command {
     Binding(Binding),
+    TupleBinding(Vec<Binding>),
+    TupleAssignment(Vec<Command>),
     /// Variable has to be already defined via binding to be assigned
     Assignment(Variable, Value),
     ProveControl(ProveControl),
@@ -120,6 +122,8 @@ impl fmt::Display for Command {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Command::Binding(x) => write!(f, "{}", x),
+            Command::TupleBinding(x) => write!(f, "{:?}", x),
+            Command::TupleAssignment(x) => write!(f, "{:?}", x),
             Command::Assignment(a, b) => write!(f, "{}={}", a, b),
             Command::ProveControl(x) => write!(f, "{}", x),
             Command::Block(x) => write!(f, "{}", x),
@@ -131,6 +135,7 @@ impl fmt::Display for Command {
 pub enum Binding {
     /// name, type, is_mutable
     Declaration(Variable, Type, bool),
+    /// name, type, value, is_mutable
     Assignment(Variable, Type, Value, bool),
 }
 
@@ -150,13 +155,15 @@ impl fmt::Display for Binding {
 #[derive(PartialEq, Clone, Debug)]
 pub enum Variable {
     Named(String),
-    // TODO: add definition for accessing array/tuple elements
+    /// Just a _ equivalent
+    Empty, // TODO: add definition for accessing array/tuple elements
 }
 
 impl fmt::Display for Variable {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Variable::Named(x) => write!(f, "Named({})", x),
+            Variable::Empty => write!(f, "_"),
         }
     }
 }

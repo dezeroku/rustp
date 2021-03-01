@@ -1,6 +1,7 @@
 use crate::ast;
 use crate::parser::boolean;
 use crate::parser::math;
+use itertools::izip;
 
 use nom::{
     branch::alt, bytes::complete::tag, bytes::complete::take_until, bytes::complete::take_while1,
@@ -9,7 +10,7 @@ use nom::{
     multi::many0, sequence::tuple, IResult,
 };
 
-static KEYWORDS: [&'static str; 6] = ["let", "true", "false", "&&", "||", "!"];
+static KEYWORDS: [&'static str; 7] = ["let", "true", "false", "&&", "||", "!", "_"];
 
 fn function_input(input: &str) -> IResult<&str, ast::Binding> {
     tuple((
@@ -196,7 +197,13 @@ fn multiline_comment(input: &str) -> IResult<&str, &str> {
 }
 
 fn command(input: &str) -> IResult<&str, ast::Command> {
-    alt((binding, prove_control, assignment, if_else))(input)
+    alt((
+        binding,
+        prove_control,
+        assignment,
+        assignment_tuple_unpack,
+        if_else,
+    ))(input)
 }
 
 fn assignment(input: &str) -> IResult<&str, ast::Command> {
@@ -235,6 +242,30 @@ fn assignment(input: &str) -> IResult<&str, ast::Command> {
     .and_then(|(next_input, res)| {
         let (_, v, _, _, _, val, _, _) = res;
         Ok((next_input, ast::Command::Assignment(v, val)))
+    })
+}
+
+fn assignment_tuple_unpack(input: &str) -> IResult<&str, ast::Command> {
+    // TODO: properly handle mutability for each element
+    // TODO: properly handle unpacking single value from right to multiple values on left
+    tuple((
+        space0,
+        _tuple_unpack_left,
+        space0,
+        tuple((char('='), space0, _tuple, space0, char(';'))),
+    ))(input)
+    .and_then(|(next_input, x)| {
+        let (_, v, _, tu) = x;
+        if let (_, _, ast::Value::Tuple(exp), _, _) = tu {
+            let mut result = Vec::new();
+            for (var, val) in itertools::izip!(v, exp) {
+                result.push(ast::Command::Assignment(var, val));
+            }
+
+            Ok((next_input, ast::Command::TupleAssignment(result)))
+        } else {
+            panic!("Incorrect case")
+        }
     })
 }
 
@@ -436,11 +467,56 @@ pub fn variable(input: &str) -> IResult<&str, ast::Variable> {
 }
 
 fn binding(input: &str) -> IResult<&str, ast::Command> {
-    alt((binding_assignment, binding_declaration))(input)
+    alt((
+        binding_assignment_tuple_unpack,
+        binding_assignment,
+        binding_declaration,
+    ))(input)
 }
 
 fn value(input: &str) -> IResult<&str, ast::Value> {
     alt((boolean::expr_val, math::expr_val))(input)
+}
+
+fn binding_assignment_tuple_unpack(input: &str) -> IResult<&str, ast::Command> {
+    // TODO: properly handle mutability for each element
+    tuple((
+        space0,
+        tag("let"),
+        space1,
+        _tuple_unpack_left,
+        space0,
+        opt(tuple((char(':'), space0, type_def, space0))),
+        tuple((char('='), space0, _tuple, space0, char(';'))),
+    ))(input)
+    .and_then(|(next_input, x)| {
+        let (_, _, _, v, _, t, tu) = x;
+        if let (_, _, ast::Value::Tuple(exp), _, _) = tu {
+            let mut result = Vec::new();
+            match t {
+                Some((_, _, ast::Type::Tuple(a), _)) => {
+                    for (var, ty, val) in itertools::izip!(v, a, exp) {
+                        result.push(ast::Binding::Assignment(var, ty, val, false));
+                    }
+                }
+                None => {
+                    for (var, val) in itertools::izip!(v, exp) {
+                        result.push(ast::Binding::Assignment(
+                            var,
+                            ast::Type::Unknown,
+                            val,
+                            false,
+                        ));
+                    }
+                }
+                _ => panic!("Incorrect case"),
+            }
+
+            Ok((next_input, ast::Command::TupleBinding(result)))
+        } else {
+            panic!("Incorrect case")
+        }
+    })
 }
 
 fn binding_assignment(input: &str) -> IResult<&str, ast::Command> {
@@ -509,7 +585,50 @@ fn binding_declaration(input: &str) -> IResult<&str, ast::Command> {
     })
 }
 
-// TODO: _tuple_assignment can work similarly, but return vector of values and handle _ properly
+// TODO: _tuple_unpacking can work similarly, but return vector of values and handle _ properly
+// single tuple assignment probably should be split into multiples assignments, each assigning a single value to a specific variable?
+// In this way _ could just be skipped.
+
+fn _tuple_empty_elem(input: &str) -> IResult<&str, ast::Variable> {
+    tag("_")(input).and_then(|(next_input, res)| Ok((next_input, ast::Variable::Empty)))
+}
+
+fn _tuple_unpack_left(input: &str) -> IResult<&str, Vec<ast::Variable>> {
+    tuple((
+        tag("("),
+        space0,
+        alt((variable, _tuple_empty_elem)),
+        space0,
+        char(','),
+        space0,
+        opt(alt((variable, _tuple_empty_elem))),
+        space0,
+        many0(tuple((
+            char(','),
+            space0,
+            alt((variable, _tuple_empty_elem)),
+            space0,
+        ))),
+        space0,
+        tag(")"),
+    ))(input)
+    .and_then(|(next_input, res)| {
+        let (_, _, f, _, _, _, s, _, r, _, _) = res;
+        let mut result = Vec::new();
+        result.push(f);
+        match s {
+            Some(a) => result.push(a),
+            None => {}
+        }
+
+        for item in r {
+            let (_, _, t, _) = item;
+            result.push(t);
+        }
+
+        Ok((next_input, result))
+    })
+}
 
 fn _tuple_type(input: &str) -> IResult<&str, ast::Type> {
     tuple((
@@ -825,6 +944,38 @@ mod test {
     }
 
     #[test]
+    fn assignment_tuple_unpack1() {
+        assert!(assignment_tuple_unpack("(x,) = (12,);").unwrap().0 == "");
+        assert!(assignment_tuple_unpack("(x,y) = (12, true);").unwrap().0 == "");
+        assert!(
+            assignment_tuple_unpack("(x,y, _) = (12, true, false);")
+                .unwrap()
+                .0
+                == ""
+        );
+        let mut temp = Vec::new();
+        temp.push(ast::Command::Assignment(
+            ast::Variable::Named("x".to_string()),
+            ast::Value::Expr(ast::Expr::Number(12)),
+        ));
+        temp.push(ast::Command::Assignment(
+            ast::Variable::Named("y".to_string()),
+            ast::Value::Bool(ast::Bool::True),
+        ));
+        temp.push(ast::Command::Assignment(
+            ast::Variable::Empty,
+            ast::Value::Bool(ast::Bool::False),
+        ));
+
+        assert!(
+            assignment_tuple_unpack("(x,y, _) = (12, true, false);")
+                .unwrap()
+                .1
+                == ast::Command::TupleAssignment(temp)
+        );
+    }
+
+    #[test]
     fn if_else1() {
         assert!(if_else("if a == 12 {let b = 3;}").unwrap().0 == "");
         assert!(
@@ -1024,6 +1175,54 @@ mod test {
     }
 
     #[test]
+    fn binding_assignment_tuple_unpack1() {
+        assert!(
+            binding_assignment_tuple_unpack("let (x,) = (12,);")
+                .unwrap()
+                .0
+                == ""
+        );
+        assert!(
+            binding_assignment_tuple_unpack("let (x,y) = (12, true);")
+                .unwrap()
+                .0
+                == ""
+        );
+        assert!(
+            binding_assignment_tuple_unpack("let (x,y, _) = (12, true, false);")
+                .unwrap()
+                .0
+                == ""
+        );
+        let mut temp = Vec::new();
+        temp.push(ast::Binding::Assignment(
+            ast::Variable::Named("x".to_string()),
+            ast::Type::Unknown,
+            ast::Value::Expr(ast::Expr::Number(12)),
+            false,
+        ));
+        temp.push(ast::Binding::Assignment(
+            ast::Variable::Named("y".to_string()),
+            ast::Type::Unknown,
+            ast::Value::Bool(ast::Bool::True),
+            false,
+        ));
+        temp.push(ast::Binding::Assignment(
+            ast::Variable::Empty,
+            ast::Type::Unknown,
+            ast::Value::Bool(ast::Bool::False),
+            false,
+        ));
+
+        assert!(
+            binding_assignment_tuple_unpack("let (x,y, _) = (12, true, false);")
+                .unwrap()
+                .1
+                == ast::Command::TupleBinding(temp)
+        );
+    }
+
+    #[test]
     fn binding_declaration1() {
         assert!(binding_declaration("let x: i32;").unwrap().0 == "");
         assert!(binding_declaration("let x;").unwrap().0 == "");
@@ -1106,5 +1305,12 @@ mod test {
         assert!(_tuple_type("(i32)").is_err());
         assert!(_tuple_type("(i32,)").is_ok());
         assert!(_tuple_type("(i32, bool, i32)").unwrap().1 == ast::Type::Tuple(t));
+    }
+
+    #[test]
+    fn _tuple_unpack_left1() {
+        assert!(_tuple_unpack_left("(true)").is_err());
+        assert!(_tuple_unpack_left("(t, a)").unwrap().0 == "");
+        assert!(_tuple_unpack_left("(t, a, _)").unwrap().0 == "");
     }
 }
