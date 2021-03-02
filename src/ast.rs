@@ -111,9 +111,7 @@ impl fmt::Display for Value {
 pub enum Command {
     Binding(Binding),
     TupleBinding(Vec<Binding>),
-    TupleAssignment(Vec<Command>),
-    /// Variable has to be already defined via binding to be assigned
-    Assignment(Variable, Value),
+    Assignment(Assignment),
     ProveControl(ProveControl),
     Block(Block),
 }
@@ -123,12 +121,18 @@ impl fmt::Display for Command {
         match self {
             Command::Binding(x) => write!(f, "{}", x),
             Command::TupleBinding(x) => write!(f, "{:?}", x),
-            Command::TupleAssignment(x) => write!(f, "{:?}", x),
-            Command::Assignment(a, b) => write!(f, "{}={}", a, b),
+            Command::Assignment(x) => write!(f, "{:?}", x),
             Command::ProveControl(x) => write!(f, "{}", x),
             Command::Block(x) => write!(f, "{}", x),
         }
     }
+}
+
+#[derive(PartialEq, Clone, Debug)]
+pub enum Assignment {
+    TupleAssignment(Vec<Assignment>),
+    /// Variable has to be already defined via binding to be assigned
+    Single(Variable, Value),
 }
 
 #[derive(PartialEq, Clone, Debug)]

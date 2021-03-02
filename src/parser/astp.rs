@@ -251,7 +251,10 @@ fn assignment(input: &str) -> IResult<&str, ast::Command> {
     ))(input)
     .and_then(|(next_input, res)| {
         let (_, v, _, _, _, val, _, _) = res;
-        Ok((next_input, ast::Command::Assignment(v, val)))
+        Ok((
+            next_input,
+            ast::Command::Assignment(ast::Assignment::Single(v, val)),
+        ))
     })
 }
 
@@ -269,10 +272,13 @@ fn assignment_tuple_unpack(input: &str) -> IResult<&str, ast::Command> {
         if let (_, _, ast::Value::Tuple(exp), _, _) = tu {
             let mut result = Vec::new();
             for (var, val) in itertools::izip!(v, exp) {
-                result.push(ast::Command::Assignment(var, val));
+                result.push(ast::Assignment::Single(var, val));
             }
 
-            Ok((next_input, ast::Command::TupleAssignment(result)))
+            Ok((
+                next_input,
+                ast::Command::Assignment(ast::Assignment::TupleAssignment(result)),
+            ))
         } else {
             panic!("Incorrect case")
         }
@@ -1013,17 +1019,17 @@ mod test {
         assert!(assignment("a = 12;").unwrap().0 == "");
         assert!(
             assignment("b = 12;").unwrap().1
-                == ast::Command::Assignment(
+                == ast::Command::Assignment(ast::Assignment::Single(
                     ast::Variable::Named("b".to_string()),
                     ast::Value::Expr(ast::Expr::Number(12))
-                )
+                ))
         );
         assert!(
             assignment("b = true;").unwrap().1
-                == ast::Command::Assignment(
+                == ast::Command::Assignment(ast::Assignment::Single(
                     ast::Variable::Named("b".to_string()),
                     ast::Value::Bool(ast::Bool::True)
-                )
+                ))
         );
         assert!(assignment("a = (12, false, a);").unwrap().0 == "");
     }
@@ -1033,13 +1039,13 @@ mod test {
         assert!(assignment("a[1] = 12;").unwrap().0 == "");
         assert!(
             assignment("b[3] = 12;").unwrap().1
-                == ast::Command::Assignment(
+                == ast::Command::Assignment(ast::Assignment::Single(
                     ast::Variable::ArrayElem(
                         "b".to_string(),
                         Box::new(ast::Value::Expr(ast::Expr::Number(3)))
                     ),
                     ast::Value::Expr(ast::Expr::Number(12))
-                )
+                ))
         );
 
         let mut temp = Vec::new();
@@ -1048,10 +1054,10 @@ mod test {
         temp.push(ast::Value::Expr(ast::Expr::Number(1)));
         assert!(
             assignment("b = [12, 3, 1];").unwrap().1
-                == ast::Command::Assignment(
+                == ast::Command::Assignment(ast::Assignment::Single(
                     ast::Variable::Named("b".to_string(),),
                     ast::Value::Array(temp)
-                )
+                ))
         );
     }
 
@@ -1066,15 +1072,15 @@ mod test {
                 == ""
         );
         let mut temp = Vec::new();
-        temp.push(ast::Command::Assignment(
+        temp.push(ast::Assignment::Single(
             ast::Variable::Named("x".to_string()),
             ast::Value::Expr(ast::Expr::Number(12)),
         ));
-        temp.push(ast::Command::Assignment(
+        temp.push(ast::Assignment::Single(
             ast::Variable::Named("y".to_string()),
             ast::Value::Bool(ast::Bool::True),
         ));
-        temp.push(ast::Command::Assignment(
+        temp.push(ast::Assignment::Single(
             ast::Variable::Empty,
             ast::Value::Bool(ast::Bool::False),
         ));
@@ -1083,7 +1089,7 @@ mod test {
             assignment_tuple_unpack("(x,y, _) = (12, true, false);")
                 .unwrap()
                 .1
-                == ast::Command::TupleAssignment(temp)
+                == ast::Command::Assignment(ast::Assignment::TupleAssignment(temp))
         );
     }
 
