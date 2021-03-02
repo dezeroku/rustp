@@ -1,7 +1,6 @@
 use crate::ast;
 use crate::parser::boolean;
 use crate::parser::math;
-use itertools::izip;
 
 use nom::{
     branch::alt, bytes::complete::tag, bytes::complete::take_until, bytes::complete::take_while1,
@@ -197,16 +196,18 @@ fn multiline_comment(input: &str) -> IResult<&str, &str> {
 }
 
 fn command(input: &str) -> IResult<&str, ast::Command> {
-    alt((
-        binding,
-        prove_control,
-        assignment,
-        assignment_tuple_unpack,
-        if_else,
-    ))(input)
+    alt((binding, prove_control, assignment, if_else))(input)
 }
 
 fn assignment(input: &str) -> IResult<&str, ast::Command> {
+    alt((
+        assignment_tuple_unpack,
+        assignment_tuple_single,
+        assignment_single,
+    ))(input)
+}
+
+fn assignment_single(input: &str) -> IResult<&str, ast::Command> {
     alt((
         tuple((
             space0,
@@ -259,11 +260,9 @@ fn assignment(input: &str) -> IResult<&str, ast::Command> {
 }
 
 fn assignment_tuple_unpack(input: &str) -> IResult<&str, ast::Command> {
-    // TODO: properly handle mutability for each element
-    // TODO: properly handle unpacking single value from right to multiple values on left
     tuple((
         space0,
-        _tuple_unpack_left,
+        tuple_unpack_left,
         space0,
         tuple((char('='), space0, _tuple, space0, char(';'))),
     ))(input)
@@ -277,7 +276,42 @@ fn assignment_tuple_unpack(input: &str) -> IResult<&str, ast::Command> {
 
             Ok((
                 next_input,
-                ast::Command::Assignment(ast::Assignment::TupleAssignment(result)),
+                ast::Command::Assignment(ast::Assignment::Tuple(result)),
+            ))
+        } else {
+            panic!("Incorrect case")
+        }
+    })
+}
+
+fn assignment_tuple_single(input: &str) -> IResult<&str, ast::Command> {
+    tuple((
+        space0,
+        tuple_unpack_left,
+        space0,
+        tuple((char('='), space0, variable_single, space0, char(';'))),
+    ))(input)
+    .and_then(|(next_input, x)| {
+        let (_, v, _, tu) = x;
+        if let (_, _, ast::Variable::Named(name), _, _) = tu {
+            let mut result = Vec::new();
+            let mut indexes = Vec::new();
+            for i in 0..v.len() {
+                indexes.push(i as i32);
+            }
+            for (var, i) in itertools::izip!(v, indexes) {
+                result.push(ast::Assignment::Single(
+                    var,
+                    ast::Value::Variable(ast::Variable::TupleElem(
+                        name.clone(),
+                        Box::new(ast::Value::Expr(ast::Expr::Number(i))),
+                    )),
+                ));
+            }
+
+            Ok((
+                next_input,
+                ast::Command::Assignment(ast::Assignment::Tuple(result)),
             ))
         } else {
             panic!("Incorrect case")
@@ -478,7 +512,7 @@ pub fn variable_val(input: &str) -> IResult<&str, ast::Value> {
 }
 
 pub fn variable(input: &str) -> IResult<&str, ast::Variable> {
-    alt((variable_array_elem, variable_single))(input)
+    alt((variable_tuple_elem, variable_array_elem, variable_single))(input)
 }
 
 fn variable_single(input: &str) -> IResult<&str, ast::Variable> {
@@ -487,8 +521,8 @@ fn variable_single(input: &str) -> IResult<&str, ast::Variable> {
 }
 
 fn variable_array_elem(input: &str) -> IResult<&str, ast::Variable> {
-    tuple((variable_name, char('['), r_value, char(']')))(input).and_then(
-        |(next_input, (v, _, i, _))| {
+    tuple((variable_name, char('['), space0, r_value, space0, char(']')))(input).and_then(
+        |(next_input, (v, _, _, i, _, _))| {
             Ok((
                 next_input,
                 ast::Variable::ArrayElem(v.to_string(), Box::new(i)),
@@ -497,10 +531,21 @@ fn variable_array_elem(input: &str) -> IResult<&str, ast::Variable> {
     )
 }
 
+fn variable_tuple_elem(input: &str) -> IResult<&str, ast::Variable> {
+    tuple((variable_name, char('.'), r_value))(input).and_then(|(next_input, (v, _, i))| {
+        Ok((
+            next_input,
+            ast::Variable::TupleElem(v.to_string(), Box::new(i)),
+        ))
+    })
+}
+
 fn binding(input: &str) -> IResult<&str, ast::Command> {
     alt((
-        binding_assignment_tuple_unpack,
+        binding_assignment_tuple_multiple,
+        binding_assignment_tuple_single,
         binding_assignment,
+        binding_declaration_tuple,
         binding_declaration,
     ))(input)
 }
@@ -509,45 +554,199 @@ fn value(input: &str) -> IResult<&str, ast::Value> {
     alt((boolean::expr_val, math::expr_val))(input)
 }
 
-fn binding_assignment_tuple_unpack(input: &str) -> IResult<&str, ast::Command> {
-    // TODO: properly handle mutability for each element
+fn binding_assignment_tuple_single(input: &str) -> IResult<&str, ast::Command> {
     tuple((
         space0,
         tag("let"),
         space1,
-        _tuple_unpack_left,
+        tuple((
+            tag("("),
+            space0,
+            opt(tuple((tag("mut"), space1))),
+            alt((variable, tuple_empty_elem)),
+            space0,
+            char(','),
+            space0,
+            opt(tuple((
+                opt(tuple((tag("mut"), space1))),
+                alt((variable, tuple_empty_elem)),
+            ))),
+            space0,
+            many0(tuple((
+                char(','),
+                space0,
+                opt(tuple((tag("mut"), space1))),
+                alt((variable, tuple_empty_elem)),
+                space0,
+            ))),
+            space0,
+            tag(")"),
+        )),
         space0,
-        opt(tuple((char(':'), space0, type_def, space0))),
-        tuple((char('='), space0, _tuple, space0, char(';'))),
+        opt(tuple((char(':'), space0, tuple_type, space0))),
+        space0,
+        tuple((char('='), space0, variable_single, space0, char(';'))),
     ))(input)
-    .and_then(|(next_input, x)| {
-        let (_, _, _, v, _, t, tu) = x;
-        if let (_, _, ast::Value::Tuple(exp), _, _) = tu {
-            let mut result = Vec::new();
-            match t {
-                Some((_, _, ast::Type::Tuple(a), _)) => {
-                    for (var, ty, val) in itertools::izip!(v, a, exp) {
-                        result.push(ast::Binding::Assignment(var, ty, val, false));
-                    }
-                }
-                None => {
-                    for (var, val) in itertools::izip!(v, exp) {
-                        result.push(ast::Binding::Assignment(
-                            var,
-                            ast::Type::Unknown,
-                            val,
-                            false,
-                        ));
-                    }
-                }
+    .and_then(
+        |(
+            next_input,
+            (_, _, _, (_, _, fm, f, _, _, _, second, _, rest, _, _), _, t, _, (_, _, temp, _, _)),
+        )| {
+            let name = match temp {
+                ast::Variable::Named(x) => x,
                 _ => panic!("Incorrect case"),
+            };
+            let mut vars = Vec::new();
+            let mut muts = Vec::new();
+            vars.push(f);
+            muts.push(fm);
+
+            match second {
+                Some((sm, s)) => {
+                    vars.push(s);
+                    muts.push(sm);
+                }
+                None => {}
             }
 
-            Ok((next_input, ast::Command::TupleBinding(result)))
-        } else {
-            panic!("Incorrect case")
-        }
-    })
+            for (_, _, rm, r, _) in rest {
+                vars.push(r);
+                muts.push(rm);
+            }
+
+            let mut types;
+            match t {
+                Some((_, _, ast::Type::Tuple(x), _)) => types = x,
+                None => {
+                    types = Vec::new();
+                    for i in 0..(vars.len()) {
+                        types.push(ast::Type::Unknown);
+                    }
+                }
+                _ => {
+                    panic!("Incorrect case")
+                }
+            };
+
+            let mut result = Vec::new();
+            let mut vals = Vec::new();
+            for i in 0..vars.len() {
+                vals.push(i as i32);
+            }
+
+            for (m, v, t, val) in itertools::izip!(muts, vars, types, vals) {
+                let mu = match m {
+                    Some(a) => true,
+                    None => false,
+                };
+                result.push(ast::Binding::Assignment(
+                    v,
+                    t,
+                    ast::Value::Variable(ast::Variable::TupleElem(
+                        name.clone(),
+                        Box::new(ast::Value::Expr(ast::Expr::Number(val))),
+                    )),
+                    mu,
+                ));
+            }
+
+            Ok((
+                next_input,
+                ast::Command::Binding(ast::Binding::Tuple(result)),
+            ))
+        },
+    )
+}
+
+fn binding_assignment_tuple_multiple(input: &str) -> IResult<&str, ast::Command> {
+    tuple((
+        space0,
+        tag("let"),
+        space1,
+        tuple((
+            tag("("),
+            space0,
+            opt(tuple((tag("mut"), space1))),
+            alt((variable, tuple_empty_elem)),
+            space0,
+            char(','),
+            space0,
+            opt(tuple((
+                opt(tuple((tag("mut"), space1))),
+                alt((variable, tuple_empty_elem)),
+            ))),
+            space0,
+            many0(tuple((
+                char(','),
+                space0,
+                opt(tuple((tag("mut"), space1))),
+                alt((variable, tuple_empty_elem)),
+                space0,
+            ))),
+            space0,
+            tag(")"),
+        )),
+        space0,
+        opt(tuple((char(':'), space0, tuple_type, space0))),
+        space0,
+        tuple((char('='), space0, _tuple, space0, char(';'))),
+    ))(input)
+    .and_then(
+        |(
+            next_input,
+            (_, _, _, (_, _, fm, f, _, _, _, second, _, rest, _, _), _, t, _, (_, _, temp, _, _)),
+        )| {
+            let vals = match temp {
+                ast::Value::Tuple(x) => x,
+                _ => panic!("Incorrect case"),
+            };
+            let mut vars = Vec::new();
+            let mut muts = Vec::new();
+            vars.push(f);
+            muts.push(fm);
+
+            match second {
+                Some((sm, s)) => {
+                    vars.push(s);
+                    muts.push(sm);
+                }
+                None => {}
+            }
+
+            for (_, _, rm, r, _) in rest {
+                vars.push(r);
+                muts.push(rm);
+            }
+
+            let mut types;
+            match t {
+                Some((_, _, ast::Type::Tuple(x), _)) => types = x,
+                None => {
+                    types = Vec::new();
+                    for i in 0..(vars.len()) {
+                        types.push(ast::Type::Unknown);
+                    }
+                }
+                _ => {
+                    panic!("Incorrect case")
+                }
+            };
+
+            let mut result = Vec::new();
+            for (m, v, t, val) in itertools::izip!(muts, vars, types, vals) {
+                let mu = match m {
+                    Some(a) => true,
+                    None => false,
+                };
+                result.push(ast::Binding::Assignment(v, t, val, mu));
+            }
+
+            Ok((
+                next_input,
+                ast::Command::Binding(ast::Binding::Tuple(result)),
+            ))
+        },
+    )
 }
 
 fn binding_assignment(input: &str) -> IResult<&str, ast::Command> {
@@ -617,6 +816,90 @@ fn binding_declaration(input: &str) -> IResult<&str, ast::Command> {
     })
 }
 
+fn binding_declaration_tuple(input: &str) -> IResult<&str, ast::Command> {
+    tuple((
+        space0,
+        tag("let"),
+        space1,
+        tuple((
+            tag("("),
+            space0,
+            opt(tuple((tag("mut"), space1))),
+            alt((variable, tuple_empty_elem)),
+            space0,
+            char(','),
+            space0,
+            opt(tuple((
+                opt(tuple((tag("mut"), space1))),
+                alt((variable, tuple_empty_elem)),
+            ))),
+            space0,
+            many0(tuple((
+                char(','),
+                space0,
+                opt(tuple((tag("mut"), space1))),
+                alt((variable, tuple_empty_elem)),
+                space0,
+            ))),
+            space0,
+            tag(")"),
+        )),
+        space0,
+        opt(tuple((char(':'), space0, tuple_type, space0))),
+        space0,
+        char(';'),
+    ))(input)
+    .and_then(
+        |(next_input, (_, _, _, (_, _, fm, f, _, _, _, second, _, rest, _, _), _, t, _, _))| {
+            let mut vars = Vec::new();
+            let mut muts = Vec::new();
+            vars.push(f);
+            muts.push(fm);
+
+            match second {
+                Some((sm, s)) => {
+                    vars.push(s);
+                    muts.push(sm);
+                }
+                None => {}
+            }
+
+            for (_, _, rm, r, _) in rest {
+                vars.push(r);
+                muts.push(rm);
+            }
+
+            let mut types;
+            match t {
+                Some((_, _, ast::Type::Tuple(x), _)) => types = x,
+                None => {
+                    types = Vec::new();
+                    for i in 0..(vars.len()) {
+                        types.push(ast::Type::Unknown);
+                    }
+                }
+                _ => {
+                    panic!("Incorrect case")
+                }
+            };
+
+            let mut result = Vec::new();
+            for (m, v, t) in itertools::izip!(muts, vars, types) {
+                let mu = match m {
+                    Some(a) => true,
+                    None => false,
+                };
+                result.push(ast::Binding::Declaration(v, t, mu));
+            }
+
+            Ok((
+                next_input,
+                ast::Command::Binding(ast::Binding::Tuple(result)),
+            ))
+        },
+    )
+}
+
 fn array_content(input: &str) -> IResult<&str, ast::Value> {
     tuple((
         char('['),
@@ -638,28 +921,24 @@ fn array_content(input: &str) -> IResult<&str, ast::Value> {
     })
 }
 
-// TODO: _tuple_unpacking can work similarly, but return vector of values and handle _ properly
-// single tuple assignment probably should be split into multiples assignments, each assigning a single value to a specific variable?
-// In this way _ could just be skipped.
-
-fn _tuple_empty_elem(input: &str) -> IResult<&str, ast::Variable> {
+fn tuple_empty_elem(input: &str) -> IResult<&str, ast::Variable> {
     tag("_")(input).and_then(|(next_input, res)| Ok((next_input, ast::Variable::Empty)))
 }
 
-fn _tuple_unpack_left(input: &str) -> IResult<&str, Vec<ast::Variable>> {
+fn tuple_unpack_left(input: &str) -> IResult<&str, Vec<ast::Variable>> {
     tuple((
         tag("("),
         space0,
-        alt((variable, _tuple_empty_elem)),
+        alt((variable, tuple_empty_elem)),
         space0,
         char(','),
         space0,
-        opt(alt((variable, _tuple_empty_elem))),
+        opt(alt((variable, tuple_empty_elem))),
         space0,
         many0(tuple((
             char(','),
             space0,
-            alt((variable, _tuple_empty_elem)),
+            alt((variable, tuple_empty_elem)),
             space0,
         ))),
         space0,
@@ -683,7 +962,7 @@ fn _tuple_unpack_left(input: &str) -> IResult<&str, Vec<ast::Variable>> {
     })
 }
 
-fn _tuple_type(input: &str) -> IResult<&str, ast::Type> {
+fn tuple_type(input: &str) -> IResult<&str, ast::Type> {
     tuple((
         tag("("),
         space0,
@@ -765,7 +1044,7 @@ fn array_type(input: &str) -> IResult<&str, ast::Type> {
 }
 
 fn type_def(input: &str) -> IResult<&str, ast::Type> {
-    alt((array_type, _tuple_type, type_def_single))(input)
+    alt((array_type, tuple_type, type_def_single))(input)
 }
 
 fn type_def_single(input: &str) -> IResult<&str, ast::Type> {
@@ -1015,30 +1294,30 @@ mod test {
     }
 
     #[test]
-    fn assignment1() {
-        assert!(assignment("a = 12;").unwrap().0 == "");
+    fn assignment_single1() {
+        assert!(assignment_single("a = 12;").unwrap().0 == "");
         assert!(
-            assignment("b = 12;").unwrap().1
+            assignment_single("b = 12;").unwrap().1
                 == ast::Command::Assignment(ast::Assignment::Single(
                     ast::Variable::Named("b".to_string()),
                     ast::Value::Expr(ast::Expr::Number(12))
                 ))
         );
         assert!(
-            assignment("b = true;").unwrap().1
+            assignment_single("b = true;").unwrap().1
                 == ast::Command::Assignment(ast::Assignment::Single(
                     ast::Variable::Named("b".to_string()),
                     ast::Value::Bool(ast::Bool::True)
                 ))
         );
-        assert!(assignment("a = (12, false, a);").unwrap().0 == "");
+        assert!(assignment_single("a = (12, false, a);").unwrap().0 == "");
     }
 
     #[test]
-    fn assignment2() {
-        assert!(assignment("a[1] = 12;").unwrap().0 == "");
+    fn assignment_single2() {
+        assert!(assignment_single("a[1] = 12;").unwrap().0 == "");
         assert!(
-            assignment("b[3] = 12;").unwrap().1
+            assignment_single("b[3] = 12;").unwrap().1
                 == ast::Command::Assignment(ast::Assignment::Single(
                     ast::Variable::ArrayElem(
                         "b".to_string(),
@@ -1053,7 +1332,7 @@ mod test {
         temp.push(ast::Value::Expr(ast::Expr::Number(3)));
         temp.push(ast::Value::Expr(ast::Expr::Number(1)));
         assert!(
-            assignment("b = [12, 3, 1];").unwrap().1
+            assignment_single("b = [12, 3, 1];").unwrap().1
                 == ast::Command::Assignment(ast::Assignment::Single(
                     ast::Variable::Named("b".to_string(),),
                     ast::Value::Array(temp)
@@ -1089,7 +1368,7 @@ mod test {
             assignment_tuple_unpack("(x,y, _) = (12, true, false);")
                 .unwrap()
                 .1
-                == ast::Command::Assignment(ast::Assignment::TupleAssignment(temp))
+                == ast::Command::Assignment(ast::Assignment::Tuple(temp))
         );
     }
 
@@ -1262,6 +1541,20 @@ mod test {
     }
 
     #[test]
+    fn variable_5() {
+        assert!(variable("a.").unwrap().0 == ".");
+        assert!(variable("a.1").is_ok());
+        assert!(variable("abc.a").unwrap().0 == "");
+        assert!(
+            variable("abc.c").unwrap().1
+                == ast::Variable::TupleElem(
+                    "abc".to_string(),
+                    Box::new(ast::Value::Variable(ast::Variable::Named("c".to_string())))
+                )
+        );
+    }
+
+    #[test]
     fn variable_array_elem1() {
         assert!(variable_array_elem("a[]").is_err());
         assert!(variable_array_elem("a[1]").is_ok());
@@ -1269,6 +1562,20 @@ mod test {
         assert!(
             variable_array_elem("abc[c]").unwrap().1
                 == ast::Variable::ArrayElem(
+                    "abc".to_string(),
+                    Box::new(ast::Value::Variable(ast::Variable::Named("c".to_string())))
+                )
+        );
+    }
+
+    #[test]
+    fn variable_tuple_elem1() {
+        assert!(variable_tuple_elem("a.").is_err());
+        assert!(variable_tuple_elem("a.1").is_ok());
+        assert!(variable_tuple_elem("abc.a").unwrap().0 == "");
+        assert!(
+            variable_tuple_elem("abc.c").unwrap().1
+                == ast::Variable::TupleElem(
                     "abc".to_string(),
                     Box::new(ast::Value::Variable(ast::Variable::Named("c".to_string())))
                 )
@@ -1387,21 +1694,91 @@ mod test {
     }
 
     #[test]
-    fn binding_assignment_tuple_unpack1() {
+    fn binding_assignment_tuple_single1() {
+        let mut temp = Vec::new();
+        temp.push(ast::Binding::Assignment(
+            ast::Variable::Named("x".to_string()),
+            ast::Type::I32,
+            ast::Value::Variable(ast::Variable::TupleElem(
+                "b".to_string(),
+                Box::new(ast::Value::Expr(ast::Expr::Number(0))),
+            )),
+            true,
+        ));
+        temp.push(ast::Binding::Assignment(
+            ast::Variable::Named("y".to_string()),
+            ast::Type::Bool,
+            ast::Value::Variable(ast::Variable::TupleElem(
+                "b".to_string(),
+                Box::new(ast::Value::Expr(ast::Expr::Number(1))),
+            )),
+            false,
+        ));
+        temp.push(ast::Binding::Assignment(
+            ast::Variable::Empty,
+            ast::Type::Bool,
+            ast::Value::Variable(ast::Variable::TupleElem(
+                "b".to_string(),
+                Box::new(ast::Value::Expr(ast::Expr::Number(2))),
+            )),
+            false,
+        ));
+
         assert!(
-            binding_assignment_tuple_unpack("let (x,) = (12,);")
+            binding_assignment_tuple_single("let (mut x,y, _): (i32, bool, bool) = b;")
+                .unwrap()
+                .1
+                == ast::Command::Binding(ast::Binding::Tuple(temp))
+        );
+    }
+
+    #[test]
+    fn assignment_tuple_single1() {
+        let mut temp = Vec::new();
+        temp.push(ast::Assignment::Single(
+            ast::Variable::Named("x".to_string()),
+            ast::Value::Variable(ast::Variable::TupleElem(
+                "b".to_string(),
+                Box::new(ast::Value::Expr(ast::Expr::Number(0))),
+            )),
+        ));
+        temp.push(ast::Assignment::Single(
+            ast::Variable::Named("y".to_string()),
+            ast::Value::Variable(ast::Variable::TupleElem(
+                "b".to_string(),
+                Box::new(ast::Value::Expr(ast::Expr::Number(1))),
+            )),
+        ));
+        temp.push(ast::Assignment::Single(
+            ast::Variable::Empty,
+            ast::Value::Variable(ast::Variable::TupleElem(
+                "b".to_string(),
+                Box::new(ast::Value::Expr(ast::Expr::Number(2))),
+            )),
+        ));
+
+        assert!(
+            assignment_tuple_single("( x,y, _) = b;").unwrap().1
+                == ast::Command::Assignment(ast::Assignment::Tuple(temp))
+        );
+    }
+
+    #[test]
+    fn binding_assignment_tuple_multiple1() {
+        assert!(
+            binding_assignment_tuple_multiple("let (x,) = (12,);")
                 .unwrap()
                 .0
                 == ""
         );
         assert!(
-            binding_assignment_tuple_unpack("let (x,y) = (12, true);")
+            binding_assignment_tuple_multiple("let (x,y) = (12, true);")
                 .unwrap()
                 .0
                 == ""
         );
         assert!(
-            binding_assignment_tuple_unpack("let (x,y, _) = (12, true, false);")
+            binding_assignment_tuple_multiple("let (x,y, _) = (12, true, false);")
                 .unwrap()
                 .0
                 == ""
@@ -1411,7 +1788,7 @@ mod test {
             ast::Variable::Named("x".to_string()),
             ast::Type::Unknown,
             ast::Value::Expr(ast::Expr::Number(12)),
-            false,
+            true,
         ));
         temp.push(ast::Binding::Assignment(
             ast::Variable::Named("y".to_string()),
@@ -1427,10 +1804,38 @@ mod test {
         ));
 
         assert!(
-            binding_assignment_tuple_unpack("let (x,y, _) = (12, true, false);")
+            binding_assignment_tuple_multiple("let (mut x,y, _) = (12, true, false);")
                 .unwrap()
                 .1
-                == ast::Command::TupleBinding(temp)
+                == ast::Command::Binding(ast::Binding::Tuple(temp))
+        );
+
+        let mut temp = Vec::new();
+        temp.push(ast::Binding::Assignment(
+            ast::Variable::Named("x".to_string()),
+            ast::Type::I32,
+            ast::Value::Expr(ast::Expr::Number(12)),
+            true,
+        ));
+        temp.push(ast::Binding::Assignment(
+            ast::Variable::Named("y".to_string()),
+            ast::Type::Bool,
+            ast::Value::Bool(ast::Bool::True),
+            false,
+        ));
+        temp.push(ast::Binding::Assignment(
+            ast::Variable::Empty,
+            ast::Type::Bool,
+            ast::Value::Bool(ast::Bool::False),
+            false,
+        ));
+
+        assert!(
+            binding_assignment_tuple_multiple(
+                "let (mut x,y, _): (i32, bool, bool) = (12, true, false);"
+            )
+            .unwrap()
+            .1 == ast::Command::Binding(ast::Binding::Tuple(temp))
         );
     }
 
@@ -1464,6 +1869,43 @@ mod test {
                 ))
         );
         assert!(binding_declaration("let c: (i32, bool);").unwrap().0 == "");
+    }
+
+    #[test]
+    fn binding_declaration_tuple1() {
+        let mut temp = Vec::new();
+        temp.push(ast::Binding::Declaration(
+            ast::Variable::Named("a".to_string()),
+            ast::Type::Unknown,
+            false,
+        ));
+        temp.push(ast::Binding::Declaration(
+            ast::Variable::Named("b".to_string()),
+            ast::Type::Unknown,
+            true,
+        ));
+        assert!(
+            binding_declaration_tuple("let (a, mut b);").unwrap().1
+                == ast::Command::Binding(ast::Binding::Tuple(temp))
+        );
+
+        let mut temp = Vec::new();
+        temp.push(ast::Binding::Declaration(
+            ast::Variable::Named("a".to_string()),
+            ast::Type::I32,
+            false,
+        ));
+        temp.push(ast::Binding::Declaration(
+            ast::Variable::Named("b".to_string()),
+            ast::Type::Bool,
+            true,
+        ));
+        assert!(
+            binding_declaration_tuple("let (a, mut b): (i32, bool);")
+                .unwrap()
+                .1
+                == ast::Command::Binding(ast::Binding::Tuple(temp))
+        );
     }
 
     #[test]
@@ -1508,21 +1950,21 @@ mod test {
     }
 
     #[test]
-    fn _tuple_type1() {
+    fn tuple_type1() {
         let mut t = Vec::new();
         t.push(ast::Type::I32);
         t.push(ast::Type::Bool);
         t.push(ast::Type::I32);
 
-        assert!(_tuple_type("(i32)").is_err());
-        assert!(_tuple_type("(i32,)").is_ok());
-        assert!(_tuple_type("(i32, bool, i32)").unwrap().1 == ast::Type::Tuple(t));
+        assert!(tuple_type("(i32)").is_err());
+        assert!(tuple_type("(i32,)").is_ok());
+        assert!(tuple_type("(i32, bool, i32)").unwrap().1 == ast::Type::Tuple(t));
     }
 
     #[test]
-    fn _tuple_unpack_left1() {
-        assert!(_tuple_unpack_left("(true)").is_err());
-        assert!(_tuple_unpack_left("(t, a)").unwrap().0 == "");
-        assert!(_tuple_unpack_left("(t, a, _)").unwrap().0 == "");
+    fn tuple_unpack_left1() {
+        assert!(tuple_unpack_left("(true)").is_err());
+        assert!(tuple_unpack_left("(t, a)").unwrap().0 == "");
+        assert!(tuple_unpack_left("(t, a, _)").unwrap().0 == "");
     }
 }

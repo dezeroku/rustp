@@ -110,7 +110,6 @@ impl fmt::Display for Value {
 #[derive(PartialEq, Clone, Debug)]
 pub enum Command {
     Binding(Binding),
-    TupleBinding(Vec<Binding>),
     Assignment(Assignment),
     ProveControl(ProveControl),
     Block(Block),
@@ -120,7 +119,6 @@ impl fmt::Display for Command {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Command::Binding(x) => write!(f, "{}", x),
-            Command::TupleBinding(x) => write!(f, "{:?}", x),
             Command::Assignment(x) => write!(f, "{:?}", x),
             Command::ProveControl(x) => write!(f, "{}", x),
             Command::Block(x) => write!(f, "{}", x),
@@ -130,7 +128,7 @@ impl fmt::Display for Command {
 
 #[derive(PartialEq, Clone, Debug)]
 pub enum Assignment {
-    TupleAssignment(Vec<Assignment>),
+    Tuple(Vec<Assignment>),
     /// Variable has to be already defined via binding to be assigned
     Single(Variable, Value),
 }
@@ -141,12 +139,14 @@ pub enum Binding {
     Declaration(Variable, Type, bool),
     /// name, type, value, is_mutable
     Assignment(Variable, Type, Value, bool),
+    Tuple(Vec<Binding>),
 }
 
 impl fmt::Display for Binding {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Binding::Declaration(name, t, m) => write!(f, "(declare-const {} {} {})", name, t, m),
+            Binding::Tuple(x) => write!(f, "{:?}", x),
             Binding::Assignment(name, t, val, m) => write!(
                 f,
                 "(declare-const {} {}); (assert (= {} {})) {};",
@@ -160,9 +160,11 @@ impl fmt::Display for Binding {
 pub enum Variable {
     Named(String),
     /// Just a _ equivalent
-    Empty, // TODO: add definition for accessing array/tuple elements
+    Empty,
     /// array name, index
     ArrayElem(String, Box<Value>),
+    /// tuple name, index
+    TupleElem(String, Box<Value>),
 }
 
 impl fmt::Display for Variable {
@@ -171,6 +173,7 @@ impl fmt::Display for Variable {
             Variable::Named(x) => write!(f, "Named({})", x),
             Variable::Empty => write!(f, "_"),
             Variable::ArrayElem(a, i) => write!(f, "{}[{}]", a, i),
+            Variable::TupleElem(a, i) => write!(f, "{}.{}", a, i),
         }
     }
 }
