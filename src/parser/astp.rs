@@ -53,7 +53,7 @@ fn function_inputs(input: &str) -> IResult<&str, Vec<ast::Binding>> {
         .or_else(|_| Ok((input, Vec::new())))
 }
 
-pub fn precondition(input: &str) -> IResult<&str, ast::Bool> {
+fn precondition(input: &str) -> IResult<&str, ast::Bool> {
     tuple((
         prove_start,
         tag("precondition"),
@@ -67,7 +67,7 @@ pub fn precondition(input: &str) -> IResult<&str, ast::Bool> {
     })
 }
 
-pub fn postcondition(input: &str) -> IResult<&str, ast::Bool> {
+fn postcondition(input: &str) -> IResult<&str, ast::Bool> {
     tuple((
         prove_start,
         tag("postcondition"),
@@ -137,7 +137,7 @@ pub fn function(input: &str) -> IResult<&str, ast::Function> {
     })
 }
 
-pub fn block(input: &str) -> IResult<&str, Vec<ast::Command>> {
+fn block(input: &str) -> IResult<&str, Vec<ast::Command>> {
     many0(tuple((
         comments,
         multispace0,
@@ -450,7 +450,7 @@ fn prove_start(input: &str) -> IResult<&str, &str> {
     tag("//%")(input)
 }
 
-pub fn function_name(input: &str) -> IResult<&str, &str> {
+fn function_name(input: &str) -> IResult<&str, &str> {
     let l = |x: char| char::is_alphabetic(x) || '_' == x;
 
     take_while1(l)(input).and_then(|(next_input, res)| Ok((next_input, res)))
@@ -464,13 +464,16 @@ fn variable_name(input: &str) -> IResult<&str, &str> {
         if !KEYWORDS.contains(&res) {
             Ok((next_input, res))
         } else {
-            Err((nom::Err::Error(nom::error::Error::new(res, nom::error::ErrorKind::Tag))))
+            Err(nom::Err::Error(nom::error::Error::new(
+                res,
+                nom::error::ErrorKind::Tag,
+            )))
         }
     })
 }
 
 /// Defines everything what can be used on the right side of an assignment or binding.
-pub fn r_value(input: &str) -> IResult<&str, ast::Value> {
+fn r_value(input: &str) -> IResult<&str, ast::Value> {
     // TODO: this will be problematic due to possibility of boolean and math expr_val consuming same input, just in a different level
     // handle it somehow based on the length of input matched?
     alt((
@@ -511,7 +514,7 @@ pub fn variable_val(input: &str) -> IResult<&str, ast::Value> {
     variable(input).and_then(|(next_input, res)| Ok((next_input, ast::Value::Variable(res))))
 }
 
-pub fn variable(input: &str) -> IResult<&str, ast::Variable> {
+fn variable(input: &str) -> IResult<&str, ast::Variable> {
     alt((variable_tuple_elem, variable_array_elem, variable_single))(input)
 }
 
@@ -548,10 +551,6 @@ fn binding(input: &str) -> IResult<&str, ast::Command> {
         binding_declaration_tuple,
         binding_declaration,
     ))(input)
-}
-
-fn value(input: &str) -> IResult<&str, ast::Value> {
-    alt((boolean::expr_val, math::expr_val))(input)
 }
 
 fn binding_assignment_tuple_single(input: &str) -> IResult<&str, ast::Command> {
@@ -619,7 +618,7 @@ fn binding_assignment_tuple_single(input: &str) -> IResult<&str, ast::Command> {
                 Some((_, _, ast::Type::Tuple(x), _)) => types = x,
                 None => {
                     types = Vec::new();
-                    for i in 0..(vars.len()) {
+                    for _ in 0..(vars.len()) {
                         types.push(ast::Type::Unknown);
                     }
                 }
@@ -636,7 +635,7 @@ fn binding_assignment_tuple_single(input: &str) -> IResult<&str, ast::Command> {
 
             for (m, v, t, val) in itertools::izip!(muts, vars, types, vals) {
                 let mu = match m {
-                    Some(a) => true,
+                    Some(_) => true,
                     None => false,
                 };
                 result.push(ast::Binding::Assignment(
@@ -723,7 +722,7 @@ fn binding_assignment_tuple_multiple(input: &str) -> IResult<&str, ast::Command>
                 Some((_, _, ast::Type::Tuple(x), _)) => types = x,
                 None => {
                     types = Vec::new();
-                    for i in 0..(vars.len()) {
+                    for _ in 0..(vars.len()) {
                         types.push(ast::Type::Unknown);
                     }
                 }
@@ -735,7 +734,7 @@ fn binding_assignment_tuple_multiple(input: &str) -> IResult<&str, ast::Command>
             let mut result = Vec::new();
             for (m, v, t, val) in itertools::izip!(muts, vars, types, vals) {
                 let mu = match m {
-                    Some(a) => true,
+                    Some(_) => true,
                     None => false,
                 };
                 result.push(ast::Binding::Assignment(v, t, val, mu));
@@ -769,7 +768,7 @@ fn binding_assignment(input: &str) -> IResult<&str, ast::Command> {
         let (_, _, _, m, v, _, t, tu) = x;
         let (_, _, exp, _, _) = tu;
         let mu = match m {
-            Some(a) => true,
+            Some(_) => true,
             None => false,
         };
         match t {
@@ -800,7 +799,7 @@ fn binding_declaration(input: &str) -> IResult<&str, ast::Command> {
     .and_then(|(next_input, x)| {
         let (_, _, _, m, v, _, t, _, _) = x;
         let mu = match m {
-            Some(a) => true,
+            Some(_) => true,
             None => false,
         };
         match t {
@@ -874,7 +873,7 @@ fn binding_declaration_tuple(input: &str) -> IResult<&str, ast::Command> {
                 Some((_, _, ast::Type::Tuple(x), _)) => types = x,
                 None => {
                     types = Vec::new();
-                    for i in 0..(vars.len()) {
+                    for _ in 0..(vars.len()) {
                         types.push(ast::Type::Unknown);
                     }
                 }
@@ -886,7 +885,7 @@ fn binding_declaration_tuple(input: &str) -> IResult<&str, ast::Command> {
             let mut result = Vec::new();
             for (m, v, t) in itertools::izip!(muts, vars, types) {
                 let mu = match m {
-                    Some(a) => true,
+                    Some(_) => true,
                     None => false,
                 };
                 result.push(ast::Binding::Declaration(v, t, mu));
@@ -922,7 +921,7 @@ fn array_content(input: &str) -> IResult<&str, ast::Value> {
 }
 
 fn tuple_empty_elem(input: &str) -> IResult<&str, ast::Variable> {
-    tag("_")(input).and_then(|(next_input, res)| Ok((next_input, ast::Variable::Empty)))
+    tag("_")(input).and_then(|(next_input, _)| Ok((next_input, ast::Variable::Empty)))
 }
 
 fn tuple_unpack_left(input: &str) -> IResult<&str, Vec<ast::Variable>> {
