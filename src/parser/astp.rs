@@ -225,7 +225,7 @@ fn assignment_single(input: &str) -> IResult<&str, ast::Command> {
             space0,
             tag("="),
             space0,
-            _tuple,
+            tuple_values,
             space0,
             tag(";"),
         )),
@@ -264,7 +264,7 @@ fn assignment_tuple_unpack(input: &str) -> IResult<&str, ast::Command> {
         space0,
         tuple_unpack_left,
         space0,
-        tuple((char('='), space0, _tuple, space0, char(';'))),
+        tuple((char('='), space0, tuple_values, space0, char(';'))),
     ))(input)
     .and_then(|(next_input, x)| {
         let (_, v, _, tu) = x;
@@ -474,7 +474,7 @@ pub fn r_value(input: &str) -> IResult<&str, ast::Value> {
     // TODO: this will be problematic due to possibility of boolean and math expr_val consuming same input, just in a different level
     // handle it somehow based on the length of input matched?
     alt((
-        _tuple,
+        tuple_values,
         function_call,
         variable_val,
         math::expr_val,
@@ -689,7 +689,7 @@ fn binding_assignment_tuple_multiple(input: &str) -> IResult<&str, ast::Command>
         space0,
         opt(tuple((char(':'), space0, tuple_type, space0))),
         space0,
-        tuple((char('='), space0, _tuple, space0, char(';'))),
+        tuple((char('='), space0, tuple_values, space0, char(';'))),
     ))(input)
     .and_then(
         |(
@@ -760,7 +760,7 @@ fn binding_assignment(input: &str) -> IResult<&str, ast::Command> {
         opt(tuple((char(':'), space0, type_def, space0))),
         alt((
             tuple((char('='), space0, array_content, space0, char(';'))),
-            tuple((char('='), space0, _tuple, space0, char(';'))),
+            tuple((char('='), space0, tuple_values, space0, char(';'))),
             tuple((char('='), space0, boolean::expr_val, space0, char(';'))),
             tuple((char('='), space0, math::expr_val, space0, char(';'))),
         )),
@@ -994,7 +994,7 @@ fn tuple_type(input: &str) -> IResult<&str, ast::Type> {
     })
 }
 
-fn _tuple(input: &str) -> IResult<&str, ast::Value> {
+fn tuple_values(input: &str) -> IResult<&str, ast::Value> {
     tuple((
         tag("("),
         space0,
@@ -1938,15 +1938,15 @@ mod test {
         seventh.push(ast::Value::Expr(ast::Expr::Number(2)));
         seventh.push(ast::Value::Variable(ast::Variable::Named("a".to_string())));
 
-        assert!(_tuple("(a)").is_err());
-        assert!(_tuple("(a,)").unwrap().1 == ast::Value::Tuple(first));
-        assert!(_tuple("(a, false)").unwrap().0 == "");
-        assert!(_tuple("(1,)") == Ok(("", ast::Value::Tuple(second))));
-        assert!(_tuple("(1,2)") == Ok(("", ast::Value::Tuple(third))));
-        assert!(_tuple("(a, e)").unwrap().1 == ast::Value::Tuple(fourth));
-        assert!(_tuple("(a, e, 1)").unwrap().1 == ast::Value::Tuple(fifth));
-        assert!(_tuple("(1, a)").unwrap().1 == ast::Value::Tuple(sixth));
-        assert!(_tuple("(1, 2, a)").unwrap().1 == ast::Value::Tuple(seventh));
+        assert!(tuple_values("(a)").is_err());
+        assert!(tuple_values("(a,)").unwrap().1 == ast::Value::Tuple(first));
+        assert!(tuple_values("(a, false)").unwrap().0 == "");
+        assert!(tuple_values("(1,)") == Ok(("", ast::Value::Tuple(second))));
+        assert!(tuple_values("(1,2)") == Ok(("", ast::Value::Tuple(third))));
+        assert!(tuple_values("(a, e)").unwrap().1 == ast::Value::Tuple(fourth));
+        assert!(tuple_values("(a, e, 1)").unwrap().1 == ast::Value::Tuple(fifth));
+        assert!(tuple_values("(1, a)").unwrap().1 == ast::Value::Tuple(sixth));
+        assert!(tuple_values("(1, 2, a)").unwrap().1 == ast::Value::Tuple(seventh));
     }
 
     #[test]
