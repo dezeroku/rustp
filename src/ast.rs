@@ -58,8 +58,8 @@ pub enum Type {
     I32,
     /// no nested tuples for now, although this can be easily lifted if needed
     Tuple(Vec<Type>),
-    // How to handle pointer type?
     Pointer(Box<Type>),
+    MutablePointer(Box<Type>),
     /// type of the array and its length
     Array(Box<Type>, i32),
     Unit,
@@ -74,6 +74,7 @@ impl fmt::Display for Type {
             Type::Bool => write!(f, "Bool"),
             Type::Tuple(a) => write!(f, "Tuple({:?})", a),
             Type::Pointer(a) => write!(f, "Pointer({})", a),
+            Type::MutablePointer(a) => write!(f, "MutablePointer({})", a),
             Type::Array(a, l) => write!(f, "Array({}, {})", a, l),
             Type::Unit => write!(f, "Unit"),
             Type::Unknown => write!(f, "Unknown"),
@@ -90,6 +91,8 @@ pub enum Value {
     Array(Vec<Value>),
     // function name, arguments, output type
     FunctionCall(String, Vec<Value>),
+    Dereference(Box<Value>),
+    TakeAddress(Box<Value>),
 }
 
 impl fmt::Display for Value {
@@ -100,6 +103,8 @@ impl fmt::Display for Value {
             Value::Variable(var) => write!(f, "{}", var),
             Value::Tuple(tup) => write!(f, "{:?}", tup),
             Value::Array(arr) => write!(f, "{:?}", arr),
+            Value::Dereference(x) => write!(f, "{:?}", x),
+            Value::TakeAddress(x) => write!(f, "{:?}", x),
             Value::FunctionCall(name, input) => {
                 write!(f, "FunctionCall({}, {:?})", name, input)
             }

@@ -1042,8 +1042,29 @@ fn array_type(input: &str) -> IResult<&str, ast::Type> {
     })
 }
 
+fn type_def_pointer(input: &str) -> IResult<&str, bool> {
+    tag("&")(input).and_then(|(next_input, _)| Ok((next_input, false)))
+}
+
+fn type_def_pointer_mut(input: &str) -> IResult<&str, bool> {
+    tag("&mut")(input).and_then(|(next_input, _)| Ok((next_input, true)))
+}
+
 fn type_def(input: &str) -> IResult<&str, ast::Type> {
-    alt((array_type, tuple_type, type_def_single))(input)
+    tuple((
+        opt(tuple((
+            alt((type_def_pointer_mut, type_def_pointer)),
+            space0,
+        ))),
+        alt((array_type, tuple_type, type_def_single)),
+    ))(input)
+    .and_then(|(next_input, (p, t))| match p {
+        Some((mutable, _)) => match mutable {
+            true => Ok((next_input, ast::Type::MutablePointer(Box::new(t)))),
+            false => Ok((next_input, ast::Type::Pointer(Box::new(t)))),
+        },
+        None => Ok((next_input, t)),
+    })
 }
 
 fn type_def_single(input: &str) -> IResult<&str, ast::Type> {
@@ -1245,6 +1266,16 @@ mod test {
         };
 
         assert!(a == b);
+    }
+
+    #[test]
+    fn type_def1() {
+        assert!(type_def("i32").unwrap().1 == ast::Type::I32);
+        assert!(type_def("bool").unwrap().1 == ast::Type::Bool);
+        assert!(type_def("&i32").unwrap().1 == ast::Type::Pointer(Box::new(ast::Type::I32)));
+        assert!(
+            type_def("&mut i32").unwrap().1 == ast::Type::MutablePointer(Box::new(ast::Type::I32))
+        );
     }
 
     #[test]
