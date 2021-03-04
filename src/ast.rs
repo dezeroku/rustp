@@ -93,6 +93,7 @@ pub enum Value {
     FunctionCall(String, Vec<Value>),
     Dereference(Box<Value>),
     TakeAddress(Box<Value>),
+    Unit,
 }
 
 impl fmt::Display for Value {
@@ -103,6 +104,7 @@ impl fmt::Display for Value {
             Value::Variable(var) => write!(f, "{}", var),
             Value::Tuple(tup) => write!(f, "{:?}", tup),
             Value::Array(arr) => write!(f, "{:?}", arr),
+            Value::Unit => write!(f, "()"),
             Value::Dereference(x) => write!(f, "{:?}", x),
             Value::TakeAddress(x) => write!(f, "{:?}", x),
             Value::FunctionCall(name, input) => {
@@ -265,6 +267,7 @@ pub struct Function {
     pub precondition: Bool,
     /// default value is just true
     pub postcondition: Bool,
+    pub return_value: Value,
 }
 
 impl fmt::Display for Function {

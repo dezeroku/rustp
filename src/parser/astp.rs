@@ -91,23 +91,40 @@ pub fn function(input: &str) -> IResult<&str, ast::Function> {
         space1,
         function_name,
         space1,
-        tag("("),
-        space0,
-        function_inputs,
-        space0,
-        tag(")"),
+        tuple((tag("("), space0, function_inputs, space0, tag(")"))),
         space0,
         opt(tuple((tag("->"), space0, type_def))),
         space0,
         tag("{"),
         space0,
         block,
-        space0,
+        multispace0,
+        opt(r_value),
+        multispace0,
         tag("}"),
     ))(input)
     .and_then(|(next_input, res)| {
-        let (pre, _, post, _, _, _, name, _, _, _, inputs, _, _, _, out, _, _, _, comms, _, _) =
-            res;
+        let (
+            pre,
+            _,
+            post,
+            _,
+            _,
+            _,
+            name,
+            _,
+            (_, _, inputs, _, _),
+            _,
+            out,
+            _,
+            _,
+            _,
+            comms,
+            _,
+            ret,
+            _,
+            _,
+        ) = res;
 
         let pre = match pre {
             Some(a) => a,
@@ -123,6 +140,12 @@ pub fn function(input: &str) -> IResult<&str, ast::Function> {
             Some((_, _, a)) => a,
             None => ast::Type::Unit,
         };
+
+        let ret_val = match ret {
+            Some(a) => a,
+            None => ast::Value::Unit,
+        };
+
         Ok((
             next_input,
             ast::Function {
@@ -132,6 +155,7 @@ pub fn function(input: &str) -> IResult<&str, ast::Function> {
                 output: o,
                 precondition: pre,
                 postcondition: post,
+                return_value: ret_val,
             },
         ))
     })
@@ -1207,6 +1231,7 @@ mod test {
             output: ast::Type::Unit,
             precondition: ast::Bool::True,
             postcondition: ast::Bool::True,
+            return_value: ast::Value::Unit,
         };
 
         assert!(a == b);
@@ -1248,6 +1273,7 @@ mod test {
             output: ast::Type::Bool,
             precondition: ast::Bool::True,
             postcondition: ast::Bool::True,
+            return_value: ast::Value::Unit,
         };
 
         assert!(a == b);
@@ -1293,6 +1319,53 @@ mod test {
                 )),
                 Box::new(ast::Bool::False),
             ),
+            return_value: ast::Value::Unit,
+        };
+
+        assert!(a == b);
+    }
+
+    #[test]
+    fn function4() {
+        let mut content = Vec::new();
+        content.push(ast::Command::Binding(ast::Binding::Assignment(
+            ast::Variable::Named("a".to_string()),
+            ast::Type::I32,
+            ast::Value::Expr(ast::Expr::Number(14)),
+            false,
+        )));
+
+        let mut input = Vec::new();
+        input.push(ast::Binding::Declaration(
+            ast::Variable::Named("c".to_string()),
+            ast::Type::I32,
+            false,
+        ));
+        input.push(ast::Binding::Declaration(
+            ast::Variable::Named("d".to_string()),
+            ast::Type::Bool,
+            false,
+        ));
+        let a = function("//%precondition false && false\n//%postcondition (a == 12) && false\n fn a (c: i32, d: bool) -> bool {let a: i32 = 14; 13}")
+        .unwrap()
+        .1;
+
+        let b = ast::Function {
+            name: "a".to_string(),
+            content: content,
+            input: input,
+            output: ast::Type::Bool,
+            precondition: ast::Bool::And(Box::new(ast::Bool::False), Box::new(ast::Bool::False)),
+            postcondition: ast::Bool::And(
+                Box::new(ast::Bool::Equal(
+                    ast::Expr::Value(Box::new(ast::Value::Variable(ast::Variable::Named(
+                        "a".to_string(),
+                    )))),
+                    ast::Expr::Number(12),
+                )),
+                Box::new(ast::Bool::False),
+            ),
+            return_value: ast::Value::Expr(ast::Expr::Number(13)),
         };
 
         assert!(a == b);
