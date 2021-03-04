@@ -227,8 +227,7 @@ pub enum Block {
     /// vector of conditions for if/elif, vector of vectors of commands for if/elif, vector of commands for else
     If(Vec<Bool>, Vec<Vec<Command>>, Vec<Command>),
     /// iterator's name, first range elem, second range elem, commands
-    ForRange(Variable, Variable, Variable, Vec<Command>),
-    // TODO: Handle vector iterator somehow?
+    ForRange(Variable, Value, Value, Vec<Command>),
 }
 
 impl fmt::Display for Block {

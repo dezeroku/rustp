@@ -43,4 +43,9 @@ if a == 14 {
 } else {
    let c = a + 123;
 }
+
+for i in 0..c.2 {
+
+}
+
 }

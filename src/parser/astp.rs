@@ -196,7 +196,7 @@ fn multiline_comment(input: &str) -> IResult<&str, &str> {
 }
 
 fn command(input: &str) -> IResult<&str, ast::Command> {
-    alt((binding, prove_control, assignment, if_else))(input)
+    alt((binding, prove_control, assignment, if_else, for_parse))(input)
 }
 
 fn assignment(input: &str) -> IResult<&str, ast::Command> {
@@ -317,6 +317,36 @@ fn assignment_tuple_single(input: &str) -> IResult<&str, ast::Command> {
             panic!("Incorrect case")
         }
     })
+}
+
+fn for_parse(input: &str) -> IResult<&str, ast::Command> {
+    tuple((
+        tag("for"),
+        space1,
+        variable_single,
+        space1,
+        tag("in"),
+        space1,
+        r_value,
+        space0,
+        tag(".."),
+        space0,
+        r_value,
+        space0,
+        tag("{"),
+        multispace0,
+        block,
+        multispace0,
+        tag("}"),
+    ))(input)
+    .and_then(
+        |(next_input, (_, _, iter, _, _, _, start, _, _, _, end, _, _, _, comms, _, _))| {
+            Ok((
+                next_input,
+                ast::Command::Block(ast::Block::ForRange(iter, start, end, comms)),
+            ))
+        },
+    )
 }
 
 fn if_else(input: &str) -> IResult<&str, ast::Command> {
@@ -1996,5 +2026,73 @@ mod test {
         assert!(tuple_unpack_left("(true)").is_err());
         assert!(tuple_unpack_left("(t, a)").unwrap().0 == "");
         assert!(tuple_unpack_left("(t, a, _)").unwrap().0 == "");
+    }
+
+    #[test]
+    fn for_parse1() {
+        assert!(
+            for_parse("for i in 0..2 {}").unwrap().1
+                == ast::Command::Block(ast::Block::ForRange(
+                    ast::Variable::Named("i".to_string()),
+                    ast::Value::Expr(ast::Expr::Number(0)),
+                    ast::Value::Expr(ast::Expr::Number(2)),
+                    Vec::new()
+                ))
+        );
+
+        assert!(
+            for_parse("for i in 0..b {}").unwrap().1
+                == ast::Command::Block(ast::Block::ForRange(
+                    ast::Variable::Named("i".to_string()),
+                    ast::Value::Expr(ast::Expr::Number(0)),
+                    ast::Value::Variable(ast::Variable::Named("b".to_string())),
+                    Vec::new()
+                ))
+        );
+
+        let mut temp = Vec::new();
+        temp.push(ast::Command::Binding(ast::Binding::Assignment(
+            ast::Variable::Named("x".to_string()),
+            ast::Type::Unknown,
+            ast::Value::Expr(ast::Expr::Number(1)),
+            false,
+        )));
+
+        assert!(
+            for_parse("for i in 0..b {let x = 1;}").unwrap().1
+                == ast::Command::Block(ast::Block::ForRange(
+                    ast::Variable::Named("i".to_string()),
+                    ast::Value::Expr(ast::Expr::Number(0)),
+                    ast::Value::Variable(ast::Variable::Named("b".to_string())),
+                    temp
+                ))
+        );
+
+        let mut temp = Vec::new();
+        temp.push(ast::Command::Binding(ast::Binding::Assignment(
+            ast::Variable::Named("x".to_string()),
+            ast::Type::Unknown,
+            ast::Value::Expr(ast::Expr::Number(1)),
+            false,
+        )));
+
+        temp.push(ast::Command::Binding(ast::Binding::Assignment(
+            ast::Variable::Named("y".to_string()),
+            ast::Type::Unknown,
+            ast::Value::Bool(ast::Bool::True),
+            false,
+        )));
+
+        assert!(
+            for_parse("for i in 0..b {let x = 1; let y = true;}")
+                .unwrap()
+                .1
+                == ast::Command::Block(ast::Block::ForRange(
+                    ast::Variable::Named("i".to_string()),
+                    ast::Value::Expr(ast::Expr::Number(0)),
+                    ast::Value::Variable(ast::Variable::Named("b".to_string())),
+                    temp
+                ))
+        );
     }
 }
