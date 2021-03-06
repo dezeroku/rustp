@@ -1,6 +1,22 @@
 use std::fmt;
 
 #[derive(PartialEq, Clone, Debug)]
+pub struct Program {
+    pub content: Vec<Function>,
+}
+
+impl fmt::Display for Program {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let mut temp: String = "".to_owned();
+        for item in self.content.iter() {
+            temp += &item.to_string();
+            temp += "\t";
+        }
+        write!(f, "{}", temp)
+    }
+}
+
+#[derive(PartialEq, Clone, Debug)]
 pub enum Bool {
     And(Box<Bool>, Box<Bool>),
     Or(Box<Bool>, Box<Bool>),

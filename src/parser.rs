@@ -6,6 +6,6 @@ mod astp;
 mod boolean;
 mod math;
 
-pub fn function(input: &str) -> IResult<&str, ast::Function> {
-    astp::function(input)
+pub fn program(input: &str) -> IResult<&str, ast::Program> {
+    astp::program(input)
 }

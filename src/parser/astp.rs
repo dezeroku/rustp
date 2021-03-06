@@ -6,10 +6,15 @@ use nom::{
     branch::alt, bytes::complete::tag, bytes::complete::take_until, bytes::complete::take_while1,
     character::complete::char, character::complete::multispace0, character::complete::newline,
     character::complete::space0, character::complete::space1, combinator::not, combinator::opt,
-    multi::many0, sequence::tuple, IResult,
+    multi::many0, multi::many1, sequence::tuple, IResult,
 };
 
 static KEYWORDS: [&'static str; 7] = ["let", "true", "false", "&&", "||", "!", "_"];
+
+pub fn program(input: &str) -> IResult<&str, ast::Program> {
+    many1(function)(input)
+        .and_then(|(next_input, res)| Ok((next_input, ast::Program { content: res })))
+}
 
 fn function_input(input: &str) -> IResult<&str, ast::Binding> {
     tuple((
@@ -81,7 +86,7 @@ fn postcondition(input: &str) -> IResult<&str, ast::Bool> {
     })
 }
 
-pub fn function(input: &str) -> IResult<&str, ast::Function> {
+fn function(input: &str) -> IResult<&str, ast::Function> {
     tuple((
         opt(precondition),
         multispace0,
