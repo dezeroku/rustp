@@ -92,7 +92,7 @@ pub enum Value {
     // function name, arguments, output type
     FunctionCall(String, Vec<Value>),
     Dereference(Box<Value>),
-    TakeAddress(Box<Value>),
+    Reference(Box<Value>),
     Unit,
 }
 
@@ -106,7 +106,7 @@ impl fmt::Display for Value {
             Value::Array(arr) => write!(f, "{:?}", arr),
             Value::Unit => write!(f, "()"),
             Value::Dereference(x) => write!(f, "{:?}", x),
-            Value::TakeAddress(x) => write!(f, "{:?}", x),
+            Value::Reference(x) => write!(f, "{:?}", x),
             Value::FunctionCall(name, input) => {
                 write!(f, "FunctionCall({}, {:?})", name, input)
             }

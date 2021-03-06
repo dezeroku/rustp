@@ -273,6 +273,26 @@ fn assignment_single(input: &str) -> IResult<&str, ast::Command> {
             space0,
             tag(";"),
         )),
+        tuple((
+            space0,
+            variable,
+            space0,
+            tag("="),
+            space0,
+            reference,
+            space0,
+            tag(";"),
+        )),
+        tuple((
+            space0,
+            variable,
+            space0,
+            tag("="),
+            space0,
+            dereference,
+            space0,
+            tag(";"),
+        )),
     ))(input)
     .and_then(|(next_input, res)| {
         let (_, v, _, _, _, val, _, _) = res;
@@ -531,12 +551,24 @@ fn r_value(input: &str) -> IResult<&str, ast::Value> {
     // TODO: this will be problematic due to possibility of boolean and math expr_val consuming same input, just in a different level
     // handle it somehow based on the length of input matched?
     alt((
+        dereference,
         tuple_values,
         function_call,
         variable_val,
         math::expr_val,
         boolean::expr_val,
+        reference,
     ))(input)
+}
+
+fn reference(input: &str) -> IResult<&str, ast::Value> {
+    tuple((tag("&"), space0, r_value))(input)
+        .and_then(|(next_input, (_, _, r))| Ok((next_input, ast::Value::Reference(Box::new(r)))))
+}
+
+fn dereference(input: &str) -> IResult<&str, ast::Value> {
+    tuple((tag("*"), space0, variable_val))(input)
+        .and_then(|(next_input, (_, _, r))| Ok((next_input, ast::Value::Dereference(Box::new(r)))))
 }
 
 pub fn function_call(input: &str) -> IResult<&str, ast::Value> {
@@ -2166,6 +2198,54 @@ mod test {
                     ast::Value::Variable(ast::Variable::Named("b".to_string())),
                     temp
                 ))
+        );
+    }
+
+    #[test]
+    fn reference1() {
+        assert_eq!(
+            reference("&b").unwrap().1,
+            ast::Value::Reference(Box::new(ast::Value::Variable(ast::Variable::Named(
+                String::from("b")
+            ))))
+        );
+        assert_eq!(
+            reference("&b.1").unwrap().1,
+            ast::Value::Reference(Box::new(ast::Value::Variable(ast::Variable::TupleElem(
+                String::from("b"),
+                Box::new(ast::Value::Expr(ast::Expr::Number(1)))
+            ))))
+        );
+        assert_eq!(
+            reference("&b[0]").unwrap().1,
+            ast::Value::Reference(Box::new(ast::Value::Variable(ast::Variable::ArrayElem(
+                String::from("b"),
+                Box::new(ast::Value::Expr(ast::Expr::Number(0)))
+            ))))
+        );
+    }
+
+    #[test]
+    fn dereference1() {
+        assert_eq!(
+            dereference("*b").unwrap().1,
+            ast::Value::Dereference(Box::new(ast::Value::Variable(ast::Variable::Named(
+                String::from("b")
+            ))))
+        );
+        assert_eq!(
+            dereference("*b.1").unwrap().1,
+            ast::Value::Dereference(Box::new(ast::Value::Variable(ast::Variable::TupleElem(
+                String::from("b"),
+                Box::new(ast::Value::Expr(ast::Expr::Number(1)))
+            ))))
+        );
+        assert_eq!(
+            dereference("*b[0]").unwrap().1,
+            ast::Value::Dereference(Box::new(ast::Value::Variable(ast::Variable::ArrayElem(
+                String::from("b"),
+                Box::new(ast::Value::Expr(ast::Expr::Number(0)))
+            ))))
         );
     }
 }
