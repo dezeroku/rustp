@@ -1,6 +1,6 @@
 //%precondition b % 4 == 2
 //%postcondition c - 2 == 1
-fn a (b: i32, c:bool, a: i32 ) -> bool {
+fn a (b: &i32, c: &mut bool, a: i32 ) -> bool {
 let mut temp: [i32; 4] = [1,2,3, 4];
 let x_d = temp;
 let mut a: i32 = 14;
@@ -50,5 +50,18 @@ for i in 0..c.2 {
 
 b = &c;
 b = *c;
+
+let mut s = 12;
+let mut s = 12;
+
+let ra = &mut s;
+let rb = &mut s;
+
+    let ra = &s; // no problem
+    let rb = &s; // no problem
+    let rc = &mut s; // BIG PROBLEM
+
+let c = a(&mut s, ra, &c);
+
 (a.1 + 43)
 }

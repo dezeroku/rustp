@@ -93,6 +93,7 @@ pub enum Value {
     FunctionCall(String, Vec<Value>),
     Dereference(Box<Value>),
     Reference(Box<Value>),
+    ReferenceMutable(Box<Value>),
     Unit,
 }
 
@@ -107,6 +108,7 @@ impl fmt::Display for Value {
             Value::Unit => write!(f, "()"),
             Value::Dereference(x) => write!(f, "{:?}", x),
             Value::Reference(x) => write!(f, "{:?}", x),
+            Value::ReferenceMutable(x) => write!(f, "{:?}", x),
             Value::FunctionCall(name, input) => {
                 write!(f, "FunctionCall({}, {:?})", name, input)
             }

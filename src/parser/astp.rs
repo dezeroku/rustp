@@ -289,6 +289,16 @@ fn assignment_single(input: &str) -> IResult<&str, ast::Command> {
             space0,
             tag("="),
             space0,
+            reference_mut,
+            space0,
+            tag(";"),
+        )),
+        tuple((
+            space0,
+            variable,
+            space0,
+            tag("="),
+            space0,
             dereference,
             space0,
             tag(";"),
@@ -557,6 +567,7 @@ fn r_value(input: &str) -> IResult<&str, ast::Value> {
         variable_val,
         math::expr_val,
         boolean::expr_val,
+        reference_mut,
         reference,
     ))(input)
 }
@@ -564,6 +575,12 @@ fn r_value(input: &str) -> IResult<&str, ast::Value> {
 fn reference(input: &str) -> IResult<&str, ast::Value> {
     tuple((tag("&"), space0, r_value))(input)
         .and_then(|(next_input, (_, _, r))| Ok((next_input, ast::Value::Reference(Box::new(r)))))
+}
+
+fn reference_mut(input: &str) -> IResult<&str, ast::Value> {
+    tuple((tag("&mut"), space1, r_value))(input).and_then(|(next_input, (_, _, r))| {
+        Ok((next_input, ast::Value::ReferenceMutable(Box::new(r))))
+    })
 }
 
 fn dereference(input: &str) -> IResult<&str, ast::Value> {
@@ -848,6 +865,9 @@ fn binding_assignment(input: &str) -> IResult<&str, ast::Command> {
             tuple((char('='), space0, tuple_values, space0, char(';'))),
             tuple((char('='), space0, boolean::expr_val, space0, char(';'))),
             tuple((char('='), space0, math::expr_val, space0, char(';'))),
+            tuple((char('='), space0, reference, space0, char(';'))),
+            tuple((char('='), space0, reference_mut, space0, char(';'))),
+            tuple((char('='), space0, dereference, space0, char(';'))),
         )),
     ))(input)
     .and_then(|(next_input, x)| {
@@ -2219,6 +2239,30 @@ mod test {
         assert_eq!(
             reference("&b[0]").unwrap().1,
             ast::Value::Reference(Box::new(ast::Value::Variable(ast::Variable::ArrayElem(
+                String::from("b"),
+                Box::new(ast::Value::Expr(ast::Expr::Number(0)))
+            ))))
+        );
+    }
+
+    #[test]
+    fn reference_mut1() {
+        assert_eq!(
+            reference_mut("&mut b").unwrap().1,
+            ast::Value::ReferenceMutable(Box::new(ast::Value::Variable(ast::Variable::Named(
+                String::from("b")
+            ))))
+        );
+        assert_eq!(
+            reference_mut("&mut b.1").unwrap().1,
+            ast::Value::ReferenceMutable(Box::new(ast::Value::Variable(ast::Variable::TupleElem(
+                String::from("b"),
+                Box::new(ast::Value::Expr(ast::Expr::Number(1)))
+            ))))
+        );
+        assert_eq!(
+            reference_mut("&mut b[0]").unwrap().1,
+            ast::Value::ReferenceMutable(Box::new(ast::Value::Variable(ast::Variable::ArrayElem(
                 String::from("b"),
                 Box::new(ast::Value::Expr(ast::Expr::Number(0)))
             ))))
