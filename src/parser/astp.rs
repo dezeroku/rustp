@@ -746,7 +746,7 @@ fn binding_assignment_tuple_single(input: &str) -> IResult<&str, ast::Command> {
                     Some(_) => true,
                     None => false,
                 };
-                result.push(ast::Binding::Assignment(
+                result.push(ast::Command::Binding(ast::Binding::Assignment(
                     v,
                     t,
                     ast::Value::Variable(ast::Variable::TupleElem(
@@ -754,7 +754,7 @@ fn binding_assignment_tuple_single(input: &str) -> IResult<&str, ast::Command> {
                         Box::new(ast::Value::Expr(ast::Expr::Number(val))),
                     )),
                     mu,
-                ));
+                )));
             }
 
             Ok((
@@ -845,7 +845,9 @@ fn binding_assignment_tuple_multiple(input: &str) -> IResult<&str, ast::Command>
                     Some(_) => true,
                     None => false,
                 };
-                result.push(ast::Binding::Assignment(v, t, val, mu));
+                result.push(ast::Command::Binding(ast::Binding::Assignment(
+                    v, t, val, mu,
+                )));
             }
 
             Ok((
@@ -999,7 +1001,7 @@ fn binding_declaration_tuple(input: &str) -> IResult<&str, ast::Command> {
                     Some(_) => true,
                     None => false,
                 };
-                result.push(ast::Binding::Declaration(v, t, mu));
+                result.push(ast::Command::Binding(ast::Binding::Declaration(v, t, mu)));
             }
 
             Ok((
@@ -1886,7 +1888,7 @@ mod test {
     #[test]
     fn binding_assignment_tuple_single1() {
         let mut temp = Vec::new();
-        temp.push(ast::Binding::Assignment(
+        temp.push(ast::Command::Binding(ast::Binding::Assignment(
             ast::Variable::Named("x".to_string()),
             ast::Type::I32,
             ast::Value::Variable(ast::Variable::TupleElem(
@@ -1894,8 +1896,8 @@ mod test {
                 Box::new(ast::Value::Expr(ast::Expr::Number(0))),
             )),
             true,
-        ));
-        temp.push(ast::Binding::Assignment(
+        )));
+        temp.push(ast::Command::Binding(ast::Binding::Assignment(
             ast::Variable::Named("y".to_string()),
             ast::Type::Bool,
             ast::Value::Variable(ast::Variable::TupleElem(
@@ -1903,8 +1905,8 @@ mod test {
                 Box::new(ast::Value::Expr(ast::Expr::Number(1))),
             )),
             false,
-        ));
-        temp.push(ast::Binding::Assignment(
+        )));
+        temp.push(ast::Command::Binding(ast::Binding::Assignment(
             ast::Variable::Empty,
             ast::Type::Bool,
             ast::Value::Variable(ast::Variable::TupleElem(
@@ -1912,7 +1914,7 @@ mod test {
                 Box::new(ast::Value::Expr(ast::Expr::Number(2))),
             )),
             false,
-        ));
+        )));
 
         assert!(
             binding_assignment_tuple_single("let (mut x,y, _): (i32, bool, bool) = b;")
@@ -1974,24 +1976,24 @@ mod test {
                 == ""
         );
         let mut temp = Vec::new();
-        temp.push(ast::Binding::Assignment(
+        temp.push(ast::Command::Binding(ast::Binding::Assignment(
             ast::Variable::Named("x".to_string()),
             ast::Type::Unknown,
             ast::Value::Expr(ast::Expr::Number(12)),
             true,
-        ));
-        temp.push(ast::Binding::Assignment(
+        )));
+        temp.push(ast::Command::Binding(ast::Binding::Assignment(
             ast::Variable::Named("y".to_string()),
             ast::Type::Unknown,
             ast::Value::Bool(ast::Bool::True),
             false,
-        ));
-        temp.push(ast::Binding::Assignment(
+        )));
+        temp.push(ast::Command::Binding(ast::Binding::Assignment(
             ast::Variable::Empty,
             ast::Type::Unknown,
             ast::Value::Bool(ast::Bool::False),
             false,
-        ));
+        )));
 
         assert!(
             binding_assignment_tuple_multiple("let (mut x,y, _) = (12, true, false);")
@@ -2001,24 +2003,24 @@ mod test {
         );
 
         let mut temp = Vec::new();
-        temp.push(ast::Binding::Assignment(
+        temp.push(ast::Command::Binding(ast::Binding::Assignment(
             ast::Variable::Named("x".to_string()),
             ast::Type::I32,
             ast::Value::Expr(ast::Expr::Number(12)),
             true,
-        ));
-        temp.push(ast::Binding::Assignment(
+        )));
+        temp.push(ast::Command::Binding(ast::Binding::Assignment(
             ast::Variable::Named("y".to_string()),
             ast::Type::Bool,
             ast::Value::Bool(ast::Bool::True),
             false,
-        ));
-        temp.push(ast::Binding::Assignment(
+        )));
+        temp.push(ast::Command::Binding(ast::Binding::Assignment(
             ast::Variable::Empty,
             ast::Type::Bool,
             ast::Value::Bool(ast::Bool::False),
             false,
-        ));
+        )));
 
         assert!(
             binding_assignment_tuple_multiple(
@@ -2064,32 +2066,32 @@ mod test {
     #[test]
     fn binding_declaration_tuple1() {
         let mut temp = Vec::new();
-        temp.push(ast::Binding::Declaration(
+        temp.push(ast::Command::Binding(ast::Binding::Declaration(
             ast::Variable::Named("a".to_string()),
             ast::Type::Unknown,
             false,
-        ));
-        temp.push(ast::Binding::Declaration(
+        )));
+        temp.push(ast::Command::Binding(ast::Binding::Declaration(
             ast::Variable::Named("b".to_string()),
             ast::Type::Unknown,
             true,
-        ));
+        )));
         assert!(
             binding_declaration_tuple("let (a, mut b);").unwrap().1
                 == ast::Command::Binding(ast::Binding::Tuple(temp))
         );
 
         let mut temp = Vec::new();
-        temp.push(ast::Binding::Declaration(
+        temp.push(ast::Command::Binding(ast::Binding::Declaration(
             ast::Variable::Named("a".to_string()),
             ast::Type::I32,
             false,
-        ));
-        temp.push(ast::Binding::Declaration(
+        )));
+        temp.push(ast::Command::Binding(ast::Binding::Declaration(
             ast::Variable::Named("b".to_string()),
             ast::Type::Bool,
             true,
-        ));
+        )));
         assert!(
             binding_declaration_tuple("let (a, mut b): (i32, bool);")
                 .unwrap()

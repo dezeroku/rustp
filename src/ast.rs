@@ -164,7 +164,7 @@ pub enum Binding {
     Declaration(Variable, Type, bool),
     /// name, type, value, is_mutable
     Assignment(Variable, Type, Value, bool),
-    Tuple(Vec<Binding>),
+    Tuple(Vec<Command>),
 }
 
 impl fmt::Display for Binding {
