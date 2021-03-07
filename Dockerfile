@@ -21,7 +21,8 @@ RUN cargo build --release && \
 ADD ./src/ ./src/
 RUN cargo build --release
 
-FROM ubuntu:20.04 as final
+# Copy just rustc to make the image smaller
+FROM rust:1.50.0 as final
 COPY --from=z3 /z3_built/bin /usr/bin
 COPY --from=z3 /z3_built/lib /usr/lib
 COPY --from=z3 /z3_built/include /usr/include
