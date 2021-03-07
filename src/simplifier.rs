@@ -1,7 +1,8 @@
 use crate::ast;
 
+mod types;
+
 /// Infer types for all the bindings
 pub fn simplify(program: ast::Program) -> ast::Program {
-    // TODO: implement
-    program
+    types::simplify(program)
 }
