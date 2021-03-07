@@ -27,7 +27,7 @@ fn main() {
     #[cfg(debug_assertions)]
     println!("Running a DEBUG version");
 
-    let filename = "example";
+    let filename = "example.rs";
     println!("In file {}:", filename);
 
     rustc_check(filename);
