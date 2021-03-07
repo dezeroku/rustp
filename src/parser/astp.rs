@@ -95,7 +95,7 @@ fn function(input: &str) -> IResult<&str, ast::Function> {
         tag("fn"),
         space1,
         function_name,
-        space1,
+        space0,
         tuple((tag("("), space0, function_inputs, space0, tag(")"))),
         space0,
         opt(tuple((tag("->"), space0, type_def))),
