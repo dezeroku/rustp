@@ -24,17 +24,32 @@ fn find_type_val(
     match val {
         ast::Value::Bool(_) => ast::Type::Bool,
         ast::Value::Expr(_) => ast::Type::I32,
+        ast::Value::Variable(x) => match state.get(x) {
+            Some(a) => a.clone(),
+            None => panic!("Variable with unknown type assigned to the right"),
+        },
         _ => unimplemented!(),
     }
 }
 
 fn simplify_function(function: ast::Function, funcs: &Vec<ast::Function>) -> ast::Function {
     let temp = function.content.clone();
+    let input = function.input.clone();
+
     let to_check = unknown_type_bindings(temp.iter().collect());
     println!("CHECK: |{:?}|", to_check);
 
     let mut state: HashMap<ast::Variable, ast::Type> = HashMap::new();
     let mut result = Vec::new();
+
+    for i in input {
+        match i {
+            ast::Binding::Declaration(name, t, _) => {
+                state.insert(name, t);
+            }
+            _ => panic!("Is this correct function definition?"),
+        }
+    }
 
     for comm in function.content {
         if to_check.iter().any(|&i| i == &comm) {
@@ -47,8 +62,14 @@ fn simplify_function(function: ast::Function, funcs: &Vec<ast::Function>) -> ast
                             name, ty, val, m,
                         )))
                     }
-                    ast::Binding::Declaration(name, t, _) => result.push(comm),
-                    ast::Binding::Tuple(binds) => result.push(comm),
+                    ast::Binding::Declaration(_, _, _) => {
+                        // TODO: This will have to be solved using backwards iteration in another function (e.g. find_type_dec)
+                        result.push(comm)
+                    }
+                    ast::Binding::Tuple(binds) => {
+                        // Try to solve individually for each case
+                        result.push(comm)
+                    }
                 },
                 ast::Command::Block(a) => {
                     unimplemented!();
@@ -371,5 +392,92 @@ mod test {
             unknown_type_bindings(to_test.iter().collect()),
             to_test.iter().collect::<Vec<&ast::Command>>()
         );
+    }
+
+    #[test]
+    fn find_type_val1() {
+        let mut state: HashMap<ast::Variable, ast::Type> = HashMap::new();
+        let mut funcs = Vec::new();
+
+        let name = ast::Variable::Named(String::from("x"));
+        let val = ast::Value::Expr(ast::Expr::Number(12));
+
+        assert_eq!(find_type_val(&name, &val, &state, &funcs), ast::Type::I32)
+    }
+
+    #[test]
+    fn find_type_val2() {
+        let mut state: HashMap<ast::Variable, ast::Type> = HashMap::new();
+        let mut funcs = Vec::new();
+
+        let name = ast::Variable::Named(String::from("x"));
+        let val = ast::Value::Bool(ast::Bool::True);
+
+        assert_eq!(find_type_val(&name, &val, &state, &funcs), ast::Type::Bool)
+    }
+
+    #[test]
+    fn find_type_val3() {
+        let mut state: HashMap<ast::Variable, ast::Type> = HashMap::new();
+        let mut funcs = Vec::new();
+
+        state.insert(ast::Variable::Named(String::from("y")), ast::Type::I32);
+
+        let name = ast::Variable::Named(String::from("x"));
+        let val = ast::Value::Variable(ast::Variable::Named(String::from("y")));
+
+        assert_eq!(find_type_val(&name, &val, &state, &funcs), ast::Type::I32)
+    }
+
+    #[test]
+    fn simplify_function1() {
+        let mut t = Vec::new();
+        t.push(ast::Binding::Declaration(
+            ast::Variable::Named(String::from("a")),
+            ast::Type::I32,
+            false,
+        ));
+
+        let mut content = Vec::new();
+        content.push(ast::Command::Binding(ast::Binding::Assignment(
+            ast::Variable::Named(String::from("x")),
+            ast::Type::Unknown,
+            ast::Value::Variable(ast::Variable::Named(String::from("a"))),
+            false,
+        )));
+
+        let f = ast::Function {
+            name: String::from("b"),
+            content: content,
+            input: t.clone(),
+            output: ast::Type::Unit,
+            precondition: ast::Bool::True,
+            postcondition: ast::Bool::True,
+            return_value: ast::Value::Unit,
+        };
+
+        let mut funcs: &Vec<ast::Function> = &Vec::new();
+
+        let mut content2 = Vec::new();
+        content2.push(ast::Command::Binding(ast::Binding::Assignment(
+            ast::Variable::Named(String::from("x")),
+            ast::Type::I32,
+            ast::Value::Variable(ast::Variable::Named(String::from("a"))),
+            false,
+        )));
+
+        let f2 = ast::Function {
+            name: String::from("b"),
+            content: content2,
+            input: t.clone(),
+            output: ast::Type::Unit,
+            precondition: ast::Bool::True,
+            postcondition: ast::Bool::True,
+            return_value: ast::Value::Unit,
+        };
+
+        let mut funcs: &Vec<ast::Function> = &Vec::new();
+
+        assert_eq!(simplify_function(f, &funcs), f2);
     }
 }
