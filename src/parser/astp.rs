@@ -187,7 +187,7 @@ fn block(input: &str) -> IResult<&str, Vec<ast::Command>> {
 fn comments(input: &str) -> IResult<&str, Vec<&str>> {
     many0(tuple((
         multispace0,
-        alt((single_comment, multiline_comment)),
+        alt((debug_comment, single_comment, multiline_comment)),
         multispace0,
     )))(input)
     .and_then(|(next_input, res)| {
@@ -202,6 +202,22 @@ fn comments(input: &str) -> IResult<&str, Vec<&str>> {
 
 fn take_while_not_newline(input: &str) -> IResult<&str, &str> {
     take_while1(|x| x != '\n')(input)
+}
+
+fn debug_comment(input: &str) -> IResult<&str, &str> {
+    not(command)(input).and_then(|(next_input, _)| {
+        tuple((
+            prove_start,
+            tag("debug"),
+            newline,
+            take_while_not_newline,
+            opt(newline),
+        ))(next_input)
+        .and_then(|(next_input, res)| {
+            let (_, _, _, c, _) = res;
+            Ok((next_input, c))
+        })
+    })
 }
 
 fn single_comment(input: &str) -> IResult<&str, &str> {
