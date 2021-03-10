@@ -617,22 +617,32 @@ pub fn function_call(input: &str) -> IResult<&str, ast::Value> {
         space0,
         tag("("),
         space0,
-        r_value,
-        many0(tuple((space0, tag(","), space0, r_value))),
+        opt(tuple((
+            r_value,
+            many0(tuple((space0, tag(","), space0, r_value))),
+        ))),
         space0,
         tag(")"),
     ))(input)
     .and_then(|(next_input, res)| {
-        let (n, _, _, _, v, a, _, _) = res;
-        let mut t = Vec::new();
-        t.push(v);
+        let (n, _, _, _, (x), _, _) = res;
+        match x {
+            Some((v, a)) => {
+                let mut t = Vec::new();
+                t.push(v);
 
-        for item in a {
-            let (_, _, _, i) = item;
-            t.push(i);
+                for item in a {
+                    let (_, _, _, i) = item;
+                    t.push(i);
+                }
+
+                Ok((next_input, ast::Value::FunctionCall(n.to_string(), t)))
+            }
+            None => Ok((
+                next_input,
+                ast::Value::FunctionCall(n.to_string(), Vec::new()),
+            )),
         }
-
-        Ok((next_input, ast::Value::FunctionCall(n.to_string(), t)))
     })
 }
 
