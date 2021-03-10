@@ -1821,7 +1821,6 @@ mod test {
         );
         // This one will be validated later on?
         // Or can we just assume that the code we are getting is correct Rust?
-        // TODO: run check with rustc before even starting to parse AST on our side.
         assert!(
             binding_assignment("let z: bool = 3;").unwrap().1
                 == ast::Command::Binding(ast::Binding::Assignment(
