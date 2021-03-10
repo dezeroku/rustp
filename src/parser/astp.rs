@@ -625,7 +625,7 @@ pub fn function_call(input: &str) -> IResult<&str, ast::Value> {
         tag(")"),
     ))(input)
     .and_then(|(next_input, res)| {
-        let (n, _, _, _, (x), _, _) = res;
+        let (n, _, _, _, x, _, _) = res;
         match x {
             Some((v, a)) => {
                 let mut t = Vec::new();

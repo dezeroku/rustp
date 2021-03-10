@@ -71,12 +71,12 @@ fn find_type_val(
     }
 }
 
-fn simplify_function(function: ast::Function, funcs: &Vec<ast::Function>) -> ast::Function {
-    let temp = function.content.clone();
+fn simplify_function_val(
+    function: ast::Function,
+    funcs: &Vec<ast::Function>,
+    to_check: Vec<ast::Command>,
+) -> ast::Function {
     let input = function.input.clone();
-
-    let to_check = unknown_type_bindings(temp.iter().collect());
-    println!("CHECK: |{:?}|", to_check);
 
     let mut state: HashMap<ast::Variable, ast::Type> = HashMap::new();
     let mut result = Vec::new();
@@ -91,11 +91,11 @@ fn simplify_function(function: ast::Function, funcs: &Vec<ast::Function>) -> ast
     }
 
     for comm in function.content {
-        if to_check.iter().any(|&i| i == &comm) {
+        if to_check.iter().any(|i| i.clone() == comm) {
             // rework the comm based on state
             match comm.clone() {
                 ast::Command::Binding(a) => match a {
-                    ast::Binding::Assignment(name, t, val, m) => {
+                    ast::Binding::Assignment(name, _, val, m) => {
                         let ty = find_type_val(&val, &state, funcs);
                         result.push(ast::Command::Binding(ast::Binding::Assignment(
                             name, ty, val, m,
@@ -106,7 +106,7 @@ fn simplify_function(function: ast::Function, funcs: &Vec<ast::Function>) -> ast
                         result.push(comm)
                     }
                     ast::Binding::Tuple(binds) => {
-                        // Try to solve individually for each case
+                        // TODO: Try to solve individually for each case
                         result.push(comm)
                     }
                 },
@@ -126,13 +126,25 @@ fn simplify_function(function: ast::Function, funcs: &Vec<ast::Function>) -> ast
                         state.insert(name, t);
                         result.push(comm)
                     }
-                    ast::Binding::Tuple(binds) => result.push(comm),
+                    ast::Binding::Tuple(binds) => {
+                        for i in binds {
+                            match i {
+                                ast::Command::Binding(ast::Binding::Assignment(name, t, _, _)) => {
+                                    state.insert(name, t);
+                                }
+                                ast::Command::Binding(ast::Binding::Declaration(name, t, _)) => {
+                                    state.insert(name, t);
+                                }
+                                _ => panic!("No nesting support"),
+                            }
+                        }
+                        result.push(comm)
+                    }
                 },
                 _ => result.push(comm),
             }
         }
     }
-
     ast::Function {
         name: function.name,
         content: result,
@@ -144,8 +156,29 @@ fn simplify_function(function: ast::Function, funcs: &Vec<ast::Function>) -> ast
     }
 }
 
-fn unknown_type_single(input: &ast::Command) -> Option<&ast::Command> {
-    match input {
+fn simplify_function(function: ast::Function, funcs: &Vec<ast::Function>) -> ast::Function {
+    let mut temp = function.content.clone();
+
+    let mut last = Vec::new();
+
+    let mut to_check = unknown_type_bindings(temp);
+
+    let mut modified = function;
+    while last != to_check {
+        println!("CHECK: |{:?}|", to_check);
+        last = to_check.clone();
+
+        // TODO: run calls to simplify_function_dec in the same loop
+        modified = simplify_function_val(modified, funcs, to_check);
+
+        temp = modified.content.clone();
+        to_check = unknown_type_bindings(temp);
+    }
+    modified
+}
+
+fn unknown_type_single(input: ast::Command) -> Option<ast::Command> {
+    match input.clone() {
         ast::Command::Binding(a) => match a {
             ast::Binding::Assignment(_, t, _, _) => match t {
                 ast::Type::Unknown => Some(input),
@@ -156,11 +189,13 @@ fn unknown_type_single(input: &ast::Command) -> Option<&ast::Command> {
                 _ => None,
             },
             ast::Binding::Tuple(binds) => {
-                let temp: Vec<&ast::Command> = binds
-                    .iter()
-                    .map(|x| unknown_type_single(x))
-                    .flatten()
-                    .collect();
+                let mut temp = Vec::new();
+                for i in binds {
+                    match unknown_type_single(i) {
+                        Some(x) => temp.push(x),
+                        None => {}
+                    }
+                }
                 if temp.len() > 0 {
                     Some(input)
                 } else {
@@ -172,10 +207,10 @@ fn unknown_type_single(input: &ast::Command) -> Option<&ast::Command> {
     }
 }
 
-fn unknown_type_bindings(input: Vec<&ast::Command>) -> Vec<&ast::Command> {
+fn unknown_type_bindings(input: Vec<ast::Command>) -> Vec<ast::Command> {
     let mut to_return = Vec::new();
     for comm in input {
-        match comm {
+        match comm.clone() {
             ast::Command::Block(a) => {
                 match a {
                     // TODO: handle this
@@ -185,10 +220,10 @@ fn unknown_type_bindings(input: Vec<&ast::Command>) -> Vec<&ast::Command> {
                         let l: usize = t
                             .iter()
                             .map(|x| {
-                                let t = x.iter().collect();
+                                let t = x.clone();
                                 unknown_type_bindings(t)
                             })
-                            .collect::<Vec<Vec<&ast::Command>>>()
+                            .collect::<Vec<Vec<ast::Command>>>()
                             .iter()
                             .map(|y| y.len())
                             .collect::<Vec<usize>>()
@@ -200,7 +235,7 @@ fn unknown_type_bindings(input: Vec<&ast::Command>) -> Vec<&ast::Command> {
                     }
                     ast::Block::ForRange(_, _, _, comms) => {
                         let f = comms.clone();
-                        let t = unknown_type_bindings(f.iter().collect());
+                        let t = unknown_type_bindings(f);
                         if t.len() > 0 {
                             to_return.push(comm);
                         }
@@ -224,13 +259,13 @@ mod test {
     #[test]
     fn unknown_type_single1() {
         assert_eq!(
-            unknown_type_single(&ast::Command::Binding(ast::Binding::Assignment(
+            unknown_type_single(ast::Command::Binding(ast::Binding::Assignment(
                 ast::Variable::Named(String::from("b")),
                 ast::Type::Unknown,
                 ast::Value::Expr(ast::Expr::Number(1)),
                 false
             ))),
-            Some(&ast::Command::Binding(ast::Binding::Assignment(
+            Some(ast::Command::Binding(ast::Binding::Assignment(
                 ast::Variable::Named(String::from("b")),
                 ast::Type::Unknown,
                 ast::Value::Expr(ast::Expr::Number(1)),
@@ -242,7 +277,7 @@ mod test {
     #[test]
     fn unknown_type_single2() {
         assert_eq!(
-            unknown_type_single(&ast::Command::Binding(ast::Binding::Assignment(
+            unknown_type_single(ast::Command::Binding(ast::Binding::Assignment(
                 ast::Variable::Named(String::from("b")),
                 ast::Type::I32,
                 ast::Value::Expr(ast::Expr::Number(1)),
@@ -266,8 +301,8 @@ mod test {
             true,
         )));
         assert_eq!(
-            unknown_type_single(&ast::Command::Binding(ast::Binding::Tuple(temp.clone()))),
-            Some(&ast::Command::Binding(ast::Binding::Tuple(temp)))
+            unknown_type_single(ast::Command::Binding(ast::Binding::Tuple(temp.clone()))),
+            Some(ast::Command::Binding(ast::Binding::Tuple(temp)))
         );
     }
 
@@ -285,8 +320,8 @@ mod test {
             true,
         )));
         assert_eq!(
-            unknown_type_single(&ast::Command::Binding(ast::Binding::Tuple(temp.clone()))),
-            Some(&ast::Command::Binding(ast::Binding::Tuple(temp)))
+            unknown_type_single(ast::Command::Binding(ast::Binding::Tuple(temp.clone()))),
+            Some(ast::Command::Binding(ast::Binding::Tuple(temp)))
         );
     }
 
@@ -304,7 +339,7 @@ mod test {
             true,
         )));
         assert_eq!(
-            unknown_type_single(&ast::Command::Binding(ast::Binding::Tuple(temp))),
+            unknown_type_single(ast::Command::Binding(ast::Binding::Tuple(temp))),
             None
         );
     }
@@ -336,8 +371,8 @@ mod test {
         let mut to_test = Vec::new();
         to_test.push(t);
 
-        let check: Vec<&ast::Command> = Vec::new();
-        assert_eq!(unknown_type_bindings(to_test.iter().collect()), check);
+        let check: Vec<ast::Command> = Vec::new();
+        assert_eq!(unknown_type_bindings(to_test), check);
     }
 
     #[test]
@@ -367,10 +402,7 @@ mod test {
         let mut to_test = Vec::new();
         to_test.push(t);
 
-        assert_eq!(
-            unknown_type_bindings(to_test.iter().collect()),
-            to_test.iter().collect::<Vec<&ast::Command>>()
-        );
+        assert_eq!(unknown_type_bindings(to_test.clone()), to_test);
     }
 
     #[test]
@@ -398,8 +430,8 @@ mod test {
         let mut to_test = Vec::new();
         to_test.push(t);
 
-        let check: Vec<&ast::Command> = Vec::new();
-        assert_eq!(unknown_type_bindings(to_test.iter().collect()), check);
+        let check: Vec<ast::Command> = Vec::new();
+        assert_eq!(unknown_type_bindings(to_test), check);
     }
 
     #[test]
@@ -427,10 +459,7 @@ mod test {
         let mut to_test = Vec::new();
         to_test.push(t);
 
-        assert_eq!(
-            unknown_type_bindings(to_test.iter().collect()),
-            to_test.iter().collect::<Vec<&ast::Command>>()
-        );
+        assert_eq!(unknown_type_bindings(to_test.clone()), to_test);
     }
 
     #[test]
