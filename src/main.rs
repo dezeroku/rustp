@@ -35,12 +35,17 @@ fn main() {
 
     let contents = fs::read_to_string(filename).expect("Something went wrong reading the file");
     let t = parser::program(&contents).expect("Ooops");
+    let f = t.clone();
     let simplified = simplifier::simplify(t.1);
     println!("Left: |{}|", t.0);
 
-    println!("Got: |{:#?}|", simplified);
+    //println!("Got: |{:#?}|", simplified);
     println!("Left: |{}|", t.0);
-    println!("Got: |{:?}|", simplified);
+
+    println!();
+    println!("Before: |{}|", f.1);
+    println!();
+    println!("After: |{}|", simplified);
 
     //fs::write("./example.z3", val).expect("Unable to write file");
 }

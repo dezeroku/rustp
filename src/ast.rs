@@ -34,17 +34,17 @@ pub enum Bool {
 impl fmt::Display for Bool {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Bool::And(a, b) => write!(f, "AND: {} {}", a, b),
-            Bool::Or(a, b) => write!(f, "OR: {} {}", a, b),
-            Bool::Not(a) => write!(f, "NOT: {}", a),
-            Bool::Value(a) => write!(f, "VAL: {}", a),
+            Bool::And(a, b) => write!(f, "{} && {}", a, b),
+            Bool::Or(a, b) => write!(f, "{} || {}", a, b),
+            Bool::Not(a) => write!(f, "!{}", a),
+            Bool::Value(a) => write!(f, "{}", a),
             Bool::True => write!(f, "true"),
             Bool::False => write!(f, "false"),
-            Bool::Equal(a, b) => write!(f, "==: {} {}", a, b),
-            Bool::Greater(a, b) => write!(f, ">: {} {}", a, b),
-            Bool::Smaller(a, b) => write!(f, "<: {} {}", a, b),
-            Bool::GreaterEqual(a, b) => write!(f, ">=: {} {}", a, b),
-            Bool::SmallerEqual(a, b) => write!(f, "<=: {} {}", a, b),
+            Bool::Equal(a, b) => write!(f, "{} == {}", a, b),
+            Bool::Greater(a, b) => write!(f, "{} > {}", a, b),
+            Bool::Smaller(a, b) => write!(f, "{} < {}", a, b),
+            Bool::GreaterEqual(a, b) => write!(f, "{} >= {}", a, b),
+            Bool::SmallerEqual(a, b) => write!(f, "{} <= {}", a, b),
         }
     }
 }
@@ -86,13 +86,13 @@ pub enum Type {
 impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Type::I32 => write!(f, "Int"),
-            Type::Bool => write!(f, "Bool"),
+            Type::I32 => write!(f, "i32"),
+            Type::Bool => write!(f, "bool"),
             Type::Tuple(a) => write!(f, "Tuple({:?})", a),
-            Type::Pointer(a) => write!(f, "Pointer({})", a),
-            Type::MutablePointer(a) => write!(f, "MutablePointer({})", a),
-            Type::Array(a, l) => write!(f, "Array({}, {})", a, l),
-            Type::Unit => write!(f, "Unit"),
+            Type::Pointer(a) => write!(f, "&({})", a),
+            Type::MutablePointer(a) => write!(f, "mut&({})", a),
+            Type::Array(a, l) => write!(f, "[{};{}]", a, l),
+            Type::Unit => write!(f, "()"),
             Type::Unknown => write!(f, "Unknown"),
         }
     }
@@ -144,7 +144,7 @@ impl fmt::Display for Command {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Command::Binding(x) => write!(f, "{}", x),
-            Command::Assignment(x) => write!(f, "{:?}", x),
+            Command::Assignment(x) => write!(f, "{}", x),
             Command::ProveControl(x) => write!(f, "{}", x),
             Command::Block(x) => write!(f, "{}", x),
         }
@@ -156,6 +156,15 @@ pub enum Assignment {
     Tuple(Vec<Assignment>),
     /// Variable has to be already defined via binding to be assigned
     Single(Variable, Value),
+}
+
+impl fmt::Display for Assignment {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Assignment::Tuple(v) => write!(f, "{:?}", v),
+            Assignment::Single(v, val) => write!(f, "{} = {}", v, val),
+        }
+    }
 }
 
 #[derive(PartialEq, Clone, Debug)]
@@ -170,13 +179,11 @@ pub enum Binding {
 impl fmt::Display for Binding {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Binding::Declaration(name, t, m) => write!(f, "(declare-const {} {} {})", name, t, m),
+            Binding::Declaration(name, t, m) => write!(f, "let {} {}: {};\n", m, name, t),
             Binding::Tuple(x) => write!(f, "{:?}", x),
-            Binding::Assignment(name, t, val, m) => write!(
-                f,
-                "(declare-const {} {}); (assert (= {} {})) {};",
-                name, t, name, val, m
-            ),
+            Binding::Assignment(name, t, val, m) => {
+                write!(f, "let {} {}: {} =  {};\n", m, name, t, val)
+            }
         }
     }
 }
@@ -257,7 +264,7 @@ impl fmt::Display for Block {
                 let mut temp = String::new();
                 for i in conds.iter().zip(comms.iter()) {
                     let (cond, comm) = i;
-                    temp += &format!("if ({}) ({:?}) el", cond, comm).to_owned();
+                    temp += &format!("if ({}) \n({:?}) el", cond, comm).to_owned();
                 }
                 temp += &format!("se ({:?})", el).to_owned();
                 write!(f, "{}", temp)
@@ -265,10 +272,10 @@ impl fmt::Display for Block {
             Block::ForRange(i, a, b, comms) => {
                 let mut temp = String::new();
                 for i in comms.iter() {
-                    temp += &format!("{:?}", i).to_owned();
+                    temp += &format!("{}", i).to_owned();
                 }
 
-                write!(f, "for {} in range {}..{} ({})", i, a, b, temp)
+                write!(f, "for {} in range {}..{} (\n{}\n)", i, a, b, temp)
             }
         }
     }
@@ -292,7 +299,7 @@ impl fmt::Display for Function {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut temp: String = "".to_owned();
         for item in self.content.iter() {
-            temp += &item.to_string();
+            temp += &format!("{}", &item);
             temp += "\t";
         }
         let mut input: String = "".to_owned();
@@ -302,7 +309,7 @@ impl fmt::Display for Function {
         }
         write!(
             f,
-            "fn {}({}) -> {} () {}",
+            "fn {}({}) -> {} () \n{}",
             self.name, input, self.output, temp
         )
     }
