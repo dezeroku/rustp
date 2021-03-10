@@ -26,8 +26,27 @@ fn find_type_val(
         ast::Value::Expr(_) => ast::Type::I32,
         ast::Value::Variable(x) => match state.get(x) {
             Some(a) => a.clone(),
-            None => panic!("Variable with unknown type assigned to the right"),
+            None => ast::Type::Unknown, //panic!("Variable with unknown type assigned to the right"),
         },
+        ast::Value::Array(v) => {
+            let l = v.clone().len() as i32;
+            for i in v {
+                let t = find_type_val(&ast::Variable::Named(String::from("_")), i, state, funcs);
+                if t != ast::Type::Unknown {
+                    return ast::Type::Array(Box::new(t), l);
+                }
+            }
+            panic!("Matching type not found")
+        }
+        ast::Value::Tuple(v) => {
+            let mut types = Vec::new();
+            for i in v {
+                let t = find_type_val(&ast::Variable::Named(String::from("_")), i, state, funcs);
+                types.push(t);
+            }
+
+            ast::Type::Tuple(types)
+        }
         _ => unimplemented!(),
     }
 }
@@ -427,6 +446,76 @@ mod test {
         let val = ast::Value::Variable(ast::Variable::Named(String::from("y")));
 
         assert_eq!(find_type_val(&name, &val, &state, &funcs), ast::Type::I32)
+    }
+
+    #[test]
+    fn find_type_val4() {
+        let mut state: HashMap<ast::Variable, ast::Type> = HashMap::new();
+        let mut funcs = Vec::new();
+
+        let name = ast::Variable::Named(String::from("x"));
+
+        let mut t = Vec::new();
+
+        t.push(ast::Value::Expr(ast::Expr::Number(12)));
+        t.push(ast::Value::Variable(ast::Variable::Named(String::from(
+            "b",
+        ))));
+        let val = ast::Value::Array(t);
+
+        assert_eq!(
+            find_type_val(&name, &val, &state, &funcs),
+            ast::Type::Array(Box::new(ast::Type::I32), 2)
+        )
+    }
+
+    #[test]
+    fn find_type_val5() {
+        let mut state: HashMap<ast::Variable, ast::Type> = HashMap::new();
+        let mut funcs = Vec::new();
+
+        let name = ast::Variable::Named(String::from("x"));
+
+        let mut t = Vec::new();
+
+        t.push(ast::Value::Variable(ast::Variable::Named(String::from(
+            "b",
+        ))));
+        t.push(ast::Value::Expr(ast::Expr::Number(12)));
+        let val = ast::Value::Array(t);
+
+        assert_eq!(
+            find_type_val(&name, &val, &state, &funcs),
+            ast::Type::Array(Box::new(ast::Type::I32), 2)
+        )
+    }
+
+    #[test]
+    fn find_type_val6() {
+        let mut state: HashMap<ast::Variable, ast::Type> = HashMap::new();
+        let mut funcs = Vec::new();
+
+        state.insert(ast::Variable::Named(String::from("y")), ast::Type::Bool);
+        let name = ast::Variable::Named(String::from("x"));
+
+        let mut t = Vec::new();
+
+        t.push(ast::Value::Expr(ast::Expr::Number(12)));
+        t.push(ast::Value::Bool(ast::Bool::True));
+        t.push(ast::Value::Variable(ast::Variable::Named(String::from(
+            "y",
+        ))));
+        let val = ast::Value::Tuple(t);
+
+        let mut types = Vec::new();
+        types.push(ast::Type::I32);
+        types.push(ast::Type::Bool);
+        types.push(ast::Type::Bool);
+
+        assert_eq!(
+            find_type_val(&name, &val, &state, &funcs),
+            ast::Type::Tuple(types)
+        )
     }
 
     #[test]

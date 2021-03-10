@@ -1191,8 +1191,8 @@ fn type_def(input: &str) -> IResult<&str, ast::Type> {
     ))(input)
     .and_then(|(next_input, (p, t))| match p {
         Some((mutable, _)) => match mutable {
-            true => Ok((next_input, ast::Type::MutablePointer(Box::new(t)))),
-            false => Ok((next_input, ast::Type::Pointer(Box::new(t)))),
+            true => Ok((next_input, ast::Type::MutableReference(Box::new(t)))),
+            false => Ok((next_input, ast::Type::Reference(Box::new(t)))),
         },
         None => Ok((next_input, t)),
     })
@@ -1452,9 +1452,10 @@ mod test {
     fn type_def1() {
         assert!(type_def("i32").unwrap().1 == ast::Type::I32);
         assert!(type_def("bool").unwrap().1 == ast::Type::Bool);
-        assert!(type_def("&i32").unwrap().1 == ast::Type::Pointer(Box::new(ast::Type::I32)));
+        assert!(type_def("&i32").unwrap().1 == ast::Type::Reference(Box::new(ast::Type::I32)));
         assert!(
-            type_def("&mut i32").unwrap().1 == ast::Type::MutablePointer(Box::new(ast::Type::I32))
+            type_def("&mut i32").unwrap().1
+                == ast::Type::MutableReference(Box::new(ast::Type::I32))
         );
     }
 
