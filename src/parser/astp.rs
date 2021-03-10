@@ -107,6 +107,7 @@ fn function(input: &str) -> IResult<&str, ast::Function> {
         opt(r_value),
         multispace0,
         tag("}"),
+        multispace0,
     ))(input)
     .and_then(|(next_input, res)| {
         let (
@@ -127,6 +128,7 @@ fn function(input: &str) -> IResult<&str, ast::Function> {
             comms,
             _,
             ret,
+            _,
             _,
             _,
         ) = res;
