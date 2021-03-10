@@ -1721,6 +1721,7 @@ mod test {
 
     #[test]
     fn function_call1() {
+        assert!(function_call("abba()").unwrap().0 == "");
         assert!(function_call("abba(a, b)").unwrap().0 == "");
         assert!(function_call("abba(12, a, true)").unwrap().0 == "");
         assert!(function_call("xd(32, true)").unwrap().0 == "");
