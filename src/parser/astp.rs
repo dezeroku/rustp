@@ -1191,7 +1191,7 @@ fn type_def(input: &str) -> IResult<&str, ast::Type> {
     ))(input)
     .and_then(|(next_input, (p, t))| match p {
         Some((mutable, _)) => match mutable {
-            true => Ok((next_input, ast::Type::MutableReference(Box::new(t)))),
+            true => Ok((next_input, ast::Type::ReferenceMutable(Box::new(t)))),
             false => Ok((next_input, ast::Type::Reference(Box::new(t)))),
         },
         None => Ok((next_input, t)),
@@ -1455,7 +1455,7 @@ mod test {
         assert!(type_def("&i32").unwrap().1 == ast::Type::Reference(Box::new(ast::Type::I32)));
         assert!(
             type_def("&mut i32").unwrap().1
-                == ast::Type::MutableReference(Box::new(ast::Type::I32))
+                == ast::Type::ReferenceMutable(Box::new(ast::Type::I32))
         );
     }
 

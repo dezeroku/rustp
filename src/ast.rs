@@ -75,7 +75,7 @@ pub enum Type {
     /// no nested tuples for now, although this can be easily lifted if needed
     Tuple(Vec<Type>),
     Reference(Box<Type>),
-    MutableReference(Box<Type>),
+    ReferenceMutable(Box<Type>),
     /// type of the array and its length
     Array(Box<Type>, i32),
     Unit,
@@ -90,7 +90,7 @@ impl fmt::Display for Type {
             Type::Bool => write!(f, "bool"),
             Type::Tuple(a) => write!(f, "Tuple({:?})", a),
             Type::Reference(a) => write!(f, "&({})", a),
-            Type::MutableReference(a) => write!(f, "mut&({})", a),
+            Type::ReferenceMutable(a) => write!(f, "mut&({})", a),
             Type::Array(a, l) => write!(f, "[{};{}]", a, l),
             Type::Unit => write!(f, "()"),
             Type::Unknown => write!(f, "Unknown"),
