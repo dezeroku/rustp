@@ -53,23 +53,32 @@ fn unknown_type_bindings(input: Vec<&ast::Command>) -> Vec<&ast::Command> {
             ast::Command::Block(a) => {
                 match a {
                     // TODO: handle this
-                    _ => unimplemented!(), //ast::Block::If(_, comms, el) => {
-                                           //    let t = comms.clone();
-                                           //    t.push(el.clone());
-                                           //    let t: usize = t
-                                           //        .iter()
-                                           //        .map(|x| unknown_type_bindings(x.clone().iter().collect()))
-                                           //        .collect::<Vec<Vec<&ast::Command>>>()
-                                           //        .iter()
-                                           //        .map(|x| x.len())
-                                           //        .collect::<Vec<usize>>()
-                                           //        .iter()
-                                           //        .sum();
-                                           //    if t > 0 {
-                                           //        to_return.push(comm);
-                                           //    }
-                                           //}
-                                           //ast::Block::ForRange(_, _, _, comms) => {}
+                    ast::Block::If(_, comms, el) => {
+                        let mut t = comms.clone();
+                        t.push(el.clone());
+                        let l: usize = t
+                            .iter()
+                            .map(|x| {
+                                let t = x.iter().collect();
+                                unknown_type_bindings(t)
+                            })
+                            .collect::<Vec<Vec<&ast::Command>>>()
+                            .iter()
+                            .map(|y| y.len())
+                            .collect::<Vec<usize>>()
+                            .iter()
+                            .sum();
+                        if l > 0 {
+                            to_return.push(comm);
+                        }
+                    }
+                    ast::Block::ForRange(_, _, _, comms) => {
+                        let f = comms.clone();
+                        let t = unknown_type_bindings(f.iter().collect());
+                        if t.len() > 0 {
+                            to_return.push(comm);
+                        }
+                    }
                 }
             }
             a => match unknown_type_single(a) {
@@ -171,6 +180,130 @@ mod test {
         assert_eq!(
             unknown_type_single(&ast::Command::Binding(ast::Binding::Tuple(temp))),
             None
+        );
+    }
+
+    #[test]
+    fn unknown_type_bindings1() {
+        let mut temp = Vec::new();
+        temp.push(ast::Command::Binding(ast::Binding::Declaration(
+            ast::Variable::Named("a".to_string()),
+            ast::Type::Bool,
+            false,
+        )));
+        temp.push(ast::Command::Binding(ast::Binding::Declaration(
+            ast::Variable::Named("b".to_string()),
+            ast::Type::I32,
+            true,
+        )));
+
+        let mut f = Vec::new();
+        f.push(ast::Command::Binding(ast::Binding::Tuple(temp)));
+
+        let t = ast::Command::Block(ast::Block::ForRange(
+            ast::Variable::Named("i".to_string()),
+            ast::Value::Expr(ast::Expr::Number(1)),
+            ast::Value::Expr(ast::Expr::Number(1)),
+            f,
+        ));
+
+        let mut to_test = Vec::new();
+        to_test.push(t);
+
+        let check: Vec<&ast::Command> = Vec::new();
+        assert_eq!(unknown_type_bindings(to_test.iter().collect()), check);
+    }
+
+    #[test]
+    fn unknown_type_bindings2() {
+        let mut temp = Vec::new();
+        temp.push(ast::Command::Binding(ast::Binding::Declaration(
+            ast::Variable::Named("a".to_string()),
+            ast::Type::Unknown,
+            false,
+        )));
+        temp.push(ast::Command::Binding(ast::Binding::Declaration(
+            ast::Variable::Named("b".to_string()),
+            ast::Type::I32,
+            true,
+        )));
+
+        let mut f = Vec::new();
+        f.push(ast::Command::Binding(ast::Binding::Tuple(temp)));
+
+        let t = ast::Command::Block(ast::Block::ForRange(
+            ast::Variable::Named("i".to_string()),
+            ast::Value::Expr(ast::Expr::Number(1)),
+            ast::Value::Expr(ast::Expr::Number(1)),
+            f,
+        ));
+
+        let mut to_test = Vec::new();
+        to_test.push(t);
+
+        assert_eq!(
+            unknown_type_bindings(to_test.iter().collect()),
+            to_test.iter().collect::<Vec<&ast::Command>>()
+        );
+    }
+
+    #[test]
+    fn unknown_type_bindings3() {
+        let mut temp = Vec::new();
+        temp.push(ast::Command::Binding(ast::Binding::Declaration(
+            ast::Variable::Named("a".to_string()),
+            ast::Type::I32,
+            false,
+        )));
+        temp.push(ast::Command::Binding(ast::Binding::Declaration(
+            ast::Variable::Named("b".to_string()),
+            ast::Type::I32,
+            true,
+        )));
+
+        let mut f = Vec::new();
+        f.push(ast::Command::Binding(ast::Binding::Tuple(temp)));
+
+        let mut x = Vec::new();
+        x.push(f.clone());
+
+        let t = ast::Command::Block(ast::Block::If(Vec::new(), x.clone(), f));
+
+        let mut to_test = Vec::new();
+        to_test.push(t);
+
+        let check: Vec<&ast::Command> = Vec::new();
+        assert_eq!(unknown_type_bindings(to_test.iter().collect()), check);
+    }
+
+    #[test]
+    fn unknown_type_bindings4() {
+        let mut temp = Vec::new();
+        temp.push(ast::Command::Binding(ast::Binding::Declaration(
+            ast::Variable::Named("a".to_string()),
+            ast::Type::Unknown,
+            false,
+        )));
+        temp.push(ast::Command::Binding(ast::Binding::Declaration(
+            ast::Variable::Named("b".to_string()),
+            ast::Type::I32,
+            true,
+        )));
+
+        let mut f = Vec::new();
+        f.push(ast::Command::Binding(ast::Binding::Tuple(temp)));
+
+        let mut x = Vec::new();
+        x.push(f.clone());
+
+        let t = ast::Command::Block(ast::Block::If(Vec::new(), x.clone(), f));
+
+        let mut to_test = Vec::new();
+        to_test.push(t);
+
+        assert_eq!(
+            unknown_type_bindings(to_test.iter().collect()),
+            to_test.iter().collect::<Vec<&ast::Command>>()
         );
     }
 }
