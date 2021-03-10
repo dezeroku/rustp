@@ -1,4 +1,5 @@
 use crate::ast;
+use std::collections::HashMap;
 
 /// Infer types for all the bindings based on types of the r_value
 pub fn simplify(program: ast::Program) -> ast::Program {
@@ -6,16 +7,81 @@ pub fn simplify(program: ast::Program) -> ast::Program {
     // For these bindings, find a context (all the following commands, until the rebinding of same name)
     // Based on the context, find assignments and infer type based on r_value
     let mut result = Vec::new();
+    let funcs = program.content.clone();
     for func in program.content {
-        result.push(simplify_function(func));
+        result.push(simplify_function(func, &funcs));
     }
 
     ast::Program { content: result }
 }
 
-fn simplify_function(function: ast::Function) -> ast::Function {
-    let to_check = unknown_type_bindings(function.content.iter().collect());
-    function
+fn find_type_val(
+    name: &ast::Variable,
+    val: &ast::Value,
+    state: &HashMap<ast::Variable, ast::Type>,
+    funcs: &Vec<ast::Function>,
+) -> ast::Type {
+    match val {
+        ast::Value::Bool(_) => ast::Type::Bool,
+        ast::Value::Expr(_) => ast::Type::I32,
+        _ => unimplemented!(),
+    }
+}
+
+fn simplify_function(function: ast::Function, funcs: &Vec<ast::Function>) -> ast::Function {
+    let temp = function.content.clone();
+    let to_check = unknown_type_bindings(temp.iter().collect());
+    println!("CHECK: |{:?}|", to_check);
+
+    let mut state: HashMap<ast::Variable, ast::Type> = HashMap::new();
+    let mut result = Vec::new();
+
+    for comm in function.content {
+        if to_check.iter().any(|&i| i == &comm) {
+            // rework the comm based on state
+            match comm.clone() {
+                ast::Command::Binding(a) => match a {
+                    ast::Binding::Assignment(name, t, val, m) => {
+                        let ty = find_type_val(&name, &val, &state, funcs);
+                        result.push(ast::Command::Binding(ast::Binding::Assignment(
+                            name, ty, val, m,
+                        )))
+                    }
+                    ast::Binding::Declaration(name, t, _) => result.push(comm),
+                    ast::Binding::Tuple(binds) => result.push(comm),
+                },
+                ast::Command::Block(a) => {
+                    unimplemented!();
+                }
+                _ => panic!("This is not a binding"),
+            }
+        } else {
+            match comm.clone() {
+                ast::Command::Binding(a) => match a {
+                    ast::Binding::Assignment(name, t, _, _) => {
+                        state.insert(name, t);
+                        result.push(comm)
+                    }
+                    ast::Binding::Declaration(name, t, _) => {
+                        state.insert(name, t);
+                        result.push(comm)
+                    }
+                    ast::Binding::Tuple(binds) => result.push(comm),
+                },
+                _ => result.push(comm),
+            }
+        }
+    }
+
+    ast::Function {
+        name: function.name,
+        content: result,
+        input: function.input,
+        output: function.output,
+        precondition: function.precondition,
+        postcondition: function.postcondition,
+        return_value: function.return_value,
+    }
 }
 
 fn unknown_type_single(input: &ast::Command) -> Option<&ast::Command> {

@@ -16,7 +16,7 @@ impl fmt::Display for Program {
     }
 }
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Clone, Debug, Eq, Hash)]
 pub enum Bool {
     And(Box<Bool>, Box<Bool>),
     Or(Box<Bool>, Box<Bool>),
@@ -98,7 +98,7 @@ impl fmt::Display for Type {
     }
 }
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Clone, Debug, Eq, Hash)]
 pub enum Value {
     Expr(Expr),
     Bool(Bool),
@@ -188,7 +188,7 @@ impl fmt::Display for Binding {
     }
 }
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Clone, Debug, Eq, Hash)]
 pub enum Variable {
     Named(String),
     /// Just a _ equivalent
@@ -210,7 +210,7 @@ impl fmt::Display for Variable {
     }
 }
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Clone, Debug, Eq, Hash)]
 pub enum Expr {
     Number(i32),
     Value(Box<Value>),
@@ -227,7 +227,7 @@ impl fmt::Display for Expr {
     }
 }
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Clone, Debug, Eq, Hash)]
 pub enum Opcode {
     Mul,
     Div,
