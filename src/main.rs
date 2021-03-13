@@ -1,6 +1,8 @@
 mod ast;
 mod parser;
 mod simplifier;
+//mod validifier;
+mod prover;
 
 use std::fs;
 use std::process::{Command, Stdio};
@@ -37,6 +39,9 @@ fn main() {
     let t = parser::program(&contents).expect("Ooops");
     let f = t.clone();
     let simplified = simplifier::simplify(t.1);
+    // We assume that at the stage of proving, all the types are already solved.
+    // If that's not the case, something is wrong in our inferring
+    // TODO: add a check for this
     println!("Left: |{}|", t.0);
 
     //println!("Got: |{:#?}|", simplified);
@@ -47,5 +52,6 @@ fn main() {
     println!();
     println!("After: |{}|", simplified);
 
+    prover::prove(simplified);
     //fs::write("./example.z3", val).expect("Unable to write file");
 }
