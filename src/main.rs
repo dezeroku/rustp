@@ -26,6 +26,27 @@ fn rustc_check(filename: &str) {
     }
 }
 
+fn parse(filename: &str) -> ast::Program {
+    let content = fs::read_to_string(filename).expect("Something went wrong reading the file");
+    let t = parser::program(&content);
+    match t {
+        Ok((rest, tree)) => {
+            if rest == "" {
+                tree
+            } else {
+                println!("Not the whole input was parsed.");
+                println!("The part that left is: {}", rest);
+                std::process::exit(3);
+            }
+        }
+        Err(a) => {
+            println!("Couldn't parse!");
+            println!("{}", a);
+            std::process::exit(2);
+        }
+    }
+}
+
 fn main() {
     #[cfg(debug_assertions)]
     println!("Running a DEBUG version");
@@ -35,20 +56,15 @@ fn main() {
 
     rustc_check(filename);
 
-    let contents = fs::read_to_string(filename).expect("Something went wrong reading the file");
-    let t = parser::program(&contents).expect("Ooops");
-    let f = t.clone();
-    let simplified = simplifier::simplify(t.1);
+    let tree = parse(filename);
+    let f = tree.clone();
+    let simplified = simplifier::simplify(tree);
+
     // We assume that at the stage of proving, all the types are already solved.
     // If that's not the case, something is wrong in our inferring
     // TODO: add a check for this
-    println!("Left: |{}|", t.0);
-
-    //println!("Got: |{:#?}|", simplified);
-    println!("Left: |{}|", t.0);
-
     println!();
-    println!("Before: |{}|", f.1);
+    println!("Before: |{}|", f);
     println!();
     println!("After: |{}|", simplified);
 
