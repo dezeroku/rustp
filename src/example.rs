@@ -1,6 +1,5 @@
 fn main() {
     let a = 12;
-    let a = 12;
     let b = 3 + a;
     for i in 0..10 {
         let x: i32 = 3;
@@ -10,6 +9,8 @@ fn main() {
 
     //%debug
     println!("{}", b);
+
+    for i in 0..12 {}
 }
 
 fn c(i: i32) -> bool {
