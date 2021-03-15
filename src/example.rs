@@ -1,5 +1,6 @@
 fn main() {
     let a = 12;
+    let a = 12;
     let b = 3 + a;
     for i in 0..10 {
         let x: i32 = 3;

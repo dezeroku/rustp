@@ -8,3 +8,4 @@ This project was written as part of my master's thesis (take a look at it [here]
 * 1 - rustc check failed
 * 2 - parsing failed (parsing error)
 * 3 - parsing did not consume whole input (maybe just make it a warning?)
+* 4 - validation failed

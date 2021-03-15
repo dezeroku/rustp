@@ -1,8 +1,8 @@
 mod ast;
 mod parser;
-mod simplifier;
-//mod validifier;
 mod prover;
+mod simplifier;
+mod validator;
 
 use std::fs;
 use std::process::{Command, Stdio};
@@ -47,6 +47,14 @@ fn parse(filename: &str) -> ast::Program {
     }
 }
 
+fn validate(input: ast::Program) {
+    let t = validator::validate(input);
+    if !t {
+        println!("Failed validation!");
+        std::process::exit(4);
+    }
+}
+
 fn main() {
     #[cfg(debug_assertions)]
     println!("Running a DEBUG version");
@@ -68,6 +76,7 @@ fn main() {
     println!();
     println!("After: |{}|", simplified);
 
+    validate(simplified.clone());
     prover::prove(simplified);
     //fs::write("./example.z3", val).expect("Unable to write file");
 }
