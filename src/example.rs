@@ -5,6 +5,7 @@ fn main() {
         let x: i32 = 3;
     }
 
+    //%assert a == 12
     let l = c(12);
 
     //%debug
