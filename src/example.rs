@@ -14,6 +14,7 @@ fn main() {
     for i in 0..12 {}
 }
 
+//%postcondition return_value
 fn c(i: i32) -> bool {
     let x = true;
     if 1 == 2 {

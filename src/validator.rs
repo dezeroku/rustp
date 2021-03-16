@@ -1,8 +1,93 @@
 use crate::ast::*;
 
-/// Just error out if some error occurs, no output
+static FORBIDDEN_DECS: [&'static str; 1] = ["return_value"];
+
 pub fn validate(input: Program) -> bool {
-    no_shadowing(input.clone())
+    no_shadowing(input.clone()) && no_forbidden_decs(input.clone())
+}
+
+fn no_forbidden_decs(input: Program) -> bool {
+    for func in input.content {
+        if !no_forbidden_decs_func(func) {
+            return false;
+        }
+    }
+
+    true
+}
+
+fn no_forbidden_decs_check(val: Variable) -> bool {
+    match val {
+        Variable::Named(a) => {
+            if !FORBIDDEN_DECS.contains(&a.as_str()) {
+                true
+            } else {
+                println!("Keyword variable used in binding: {}", a);
+                false
+            }
+        }
+        _ => true,
+    }
+}
+
+fn no_forbidden_decs_logic(content: Vec<Command>) -> bool {
+    for comm in content {
+        match comm {
+            Command::Binding(Binding::Declaration(name, _, _)) => {
+                if !no_forbidden_decs_check(name) {
+                    return false;
+                }
+            }
+            Command::Binding(Binding::Assignment(name, _, _, _)) => {
+                if !no_forbidden_decs_check(name) {
+                    return false;
+                }
+            }
+            Command::Binding(Binding::Tuple(vec)) => {
+                for dec in vec {
+                    match dec {
+                        Command::Binding(Binding::Declaration(name, _, _)) => {
+                            if !no_forbidden_decs_check(name) {
+                                return false;
+                            }
+                        }
+                        Command::Binding(Binding::Assignment(name, _, _, _)) => {
+                            if !no_forbidden_decs_check(name) {
+                                return false;
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            Command::Block(Block::If(_, blocks, el)) => {
+                let mut temp = blocks;
+                temp.push(el);
+
+                for block in temp {
+                    if !no_forbidden_decs_logic(block) {
+                        return false;
+                    }
+                }
+            }
+            Command::Block(Block::ForRange(iter, _, _, vec)) => {
+                if !no_forbidden_decs_check(iter) {
+                    return false;
+                }
+
+                if !no_forbidden_decs_logic(vec) {
+                    return false;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    true
+}
+
+fn no_forbidden_decs_func(func: Function) -> bool {
+    no_forbidden_decs_logic(func.content)
 }
 
 fn no_shadowing(input: Program) -> bool {
@@ -100,6 +185,18 @@ fn no_shadowing_func(func: Function, mut definitions: Vec<String>) -> bool {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn no_forbidden_decs_check1() {
+        assert!(!no_forbidden_decs_check(Variable::Named(String::from(
+            "return_value"
+        ))));
+    }
+
+    #[test]
+    fn no_forbidden_decs_check2() {
+        assert!(no_forbidden_decs_check(Variable::Named(String::from("a"))));
+    }
 
     #[test]
     fn no_shadowing_check1() {

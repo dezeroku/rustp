@@ -35,7 +35,7 @@ fn parse(filename: &str) -> ast::Program {
                 tree
             } else {
                 println!("Not the whole input was parsed.");
-                println!("The part that left is: {}", rest);
+                println!("The part that left is:\n{}", rest);
                 std::process::exit(3);
             }
         }
