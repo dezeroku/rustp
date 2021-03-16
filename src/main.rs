@@ -4,6 +4,7 @@ mod prover;
 mod simplifier;
 mod validator;
 
+use clap::{App, Arg, ArgMatches};
 use std::fs;
 use std::process::{Command, Stdio};
 
@@ -47,6 +48,37 @@ fn parse(filename: &str) -> ast::Program {
     }
 }
 
+fn args() -> (String, i32) {
+    let matches = App::new("rustp")
+        .version("1.0")
+        .author("d0ku <darthtyranus666666@gmail.com>")
+        .about("Verify formal corectness of programs written in language based on Rust")
+        .arg(
+            Arg::new("INPUT")
+                .about("Sets the input file to use")
+                .required(true)
+                .index(1),
+        )
+        .arg(
+            Arg::new("v")
+                .short('v')
+                .multiple(true)
+                .takes_value(false)
+                .about("Sets the level of verbosity"),
+        )
+        .get_matches();
+
+    let filename = matches.value_of("INPUT").unwrap().to_string();
+
+    let verbosity = match matches.occurrences_of("v") {
+        0 => 0,
+        1 => 1,
+        2 | _ => 2,
+    };
+
+    (filename, verbosity)
+}
+
 fn validate(input: ast::Program) {
     let t = validator::validate(input);
     if !t {
@@ -59,8 +91,12 @@ fn main() {
     #[cfg(debug_assertions)]
     println!("Running a DEBUG version");
 
-    let filename = "example.rs";
-    println!("In file {}:", filename);
+    let (_filename, verbosity) = args();
+    let filename = &_filename.as_str();
+
+    if verbosity >= 1 {
+        println!("In file {}:", filename);
+    }
 
     rustc_check(filename);
 
@@ -71,10 +107,12 @@ fn main() {
     // We assume that at the stage of proving, all the types are already solved.
     // If that's not the case, something is wrong in our inferring
     // TODO: add a check for this
-    println!();
-    println!("Before: |{}|", f);
-    println!();
-    println!("After: |{}|", simplified);
+    if verbosity >= 2 {
+        println!();
+        println!("Before: |{}|", f);
+        println!();
+        println!("After: |{}|", simplified);
+    }
 
     validate(simplified.clone());
     prover::prove(simplified);

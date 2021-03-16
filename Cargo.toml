@@ -9,4 +9,5 @@ edition = "2018"
 [dependencies]
 nom = "6.1.2"
 itertools = "0.10.0"
+clap = "3.0.0-beta.2"
 z3 = "0.9.0"

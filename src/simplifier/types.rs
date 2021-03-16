@@ -165,7 +165,6 @@ fn simplify_function(function: ast::Function, funcs: &Vec<ast::Function>) -> ast
 
     let mut modified = function;
     while last != to_check {
-        println!("CHECK: |{:?}|", to_check);
         last = to_check.clone();
 
         // TODO: run calls to simplify_function_dec in the same loop

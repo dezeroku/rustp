@@ -6,8 +6,6 @@ pub fn prove(input: Program) {
     // All that we have to prove are assertions, all the rest just modifies context.
 
     // For now just display everything here when it happens.
-    println!("HAPPENS!");
-
     for func in input.content {
         let mut temp = func.content;
         if func.output != Type::Unit {
