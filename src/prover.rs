@@ -10,9 +10,19 @@ pub fn prove(input: Program) {
 
     for func in input.content {
         let mut temp = func.content;
+        if func.output != Type::Unit {
+            temp.push(Command::Binding(Binding::Assignment(
+                Variable::Named(String::from("return_value")),
+                func.output,
+                func.return_value,
+                false,
+            )));
+        }
+
         temp.push(Command::ProveControl(ProveControl::Assert(
             func.postcondition,
         )));
+
         let con = create_context_func(temp, HashMap::new(), func.precondition);
         // Try to prove
         println!("{:?}", con);
