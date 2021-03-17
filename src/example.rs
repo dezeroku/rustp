@@ -12,6 +12,7 @@ fn main() {
     println!("{}", b);
 
     for i in 0..12 {}
+    //%assert c(c(c(c(3)))) == 132
 }
 
 //%postcondition return_value

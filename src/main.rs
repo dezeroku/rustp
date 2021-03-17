@@ -4,7 +4,7 @@ mod prover;
 mod simplifier;
 mod validator;
 
-use clap::{App, Arg, ArgMatches};
+use clap::{App, Arg};
 use std::fs;
 use std::process::{Command, Stdio};
 
