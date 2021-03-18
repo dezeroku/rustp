@@ -1,4 +1,5 @@
 mod ast;
+mod context;
 mod parser;
 mod prover;
 mod simplifier;
@@ -115,6 +116,14 @@ fn main() {
     }
 
     validate(simplified.clone());
-    prover::prove(simplified);
+    prover::prove(simplified.clone());
+
+    println!();
+    for func in simplified.content.clone() {
+        for i in context::get_context_func(func, simplified.clone()) {
+            println!("{:?}", i);
+            println!();
+        }
+    }
     //fs::write("./example.z3", val).expect("Unable to write file");
 }

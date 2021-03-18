@@ -49,7 +49,7 @@ impl fmt::Display for Bool {
     }
 }
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Clone, Debug, Hash, Eq)]
 pub enum ProveControl {
     Assert(Bool),
     Assume(Bool),
@@ -68,7 +68,7 @@ impl fmt::Display for ProveControl {
     }
 }
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Clone, Debug, Hash, Eq)]
 pub enum Type {
     Bool,
     I32,
@@ -111,6 +111,8 @@ pub enum Value {
     Reference(Box<Value>),
     ReferenceMutable(Box<Value>),
     Unit,
+    // To be used e.g. in input parameters of a function
+    Unknown,
 }
 
 impl fmt::Display for Value {
@@ -121,6 +123,7 @@ impl fmt::Display for Value {
             Value::Variable(var) => write!(f, "{}", var),
             Value::Tuple(tup) => write!(f, "{:?}", tup),
             Value::Array(arr) => write!(f, "{:?}", arr),
+            Value::Unknown => write!(f, "unknown"),
             Value::Unit => write!(f, "()"),
             Value::Dereference(x) => write!(f, "{:?}", x),
             Value::Reference(x) => write!(f, "{:?}", x),
@@ -132,12 +135,13 @@ impl fmt::Display for Value {
     }
 }
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Clone, Debug, Hash, Eq)]
 pub enum Command {
     Binding(Binding),
     Assignment(Assignment),
     ProveControl(ProveControl),
     Block(Block),
+    Noop,
 }
 
 impl fmt::Display for Command {
@@ -147,11 +151,12 @@ impl fmt::Display for Command {
             Command::Assignment(x) => write!(f, "{}", x),
             Command::ProveControl(x) => write!(f, "{}", x),
             Command::Block(x) => write!(f, "{}", x),
+            Command::Noop => write!(f, "noop"),
         }
     }
 }
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Clone, Debug, Hash, Eq)]
 pub enum Assignment {
     Tuple(Vec<Assignment>),
     /// Variable has to be already defined via binding to be assigned
@@ -167,7 +172,7 @@ impl fmt::Display for Assignment {
     }
 }
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Clone, Debug, Hash, Eq)]
 pub enum Binding {
     /// name, type, is_mutable
     Declaration(Variable, Type, bool),
@@ -249,7 +254,7 @@ impl fmt::Display for Opcode {
     }
 }
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Clone, Debug, Hash, Eq)]
 pub enum Block {
     /// vector of conditions for if/elif, vector of vectors of commands for if/elif, vector of commands for else
     If(Vec<Bool>, Vec<Vec<Command>>, Vec<Command>),
@@ -281,7 +286,7 @@ impl fmt::Display for Block {
     }
 }
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Clone, Debug, Hash, Eq)]
 pub struct Function {
     pub name: String,
     pub content: Vec<Command>,

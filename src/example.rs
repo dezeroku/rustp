@@ -8,6 +8,9 @@ fn main() {
     //%assert a == 12
     let l = c(12);
 
+    if l {
+        let g: i32 = 3;
+    }
     //%debug
     println!("{}", b);
 
