@@ -718,7 +718,7 @@ fn binding_assignment_tuple_single(input: &str) -> IResult<&str, ast::Command> {
             tag(")"),
         )),
         space0,
-        opt(tuple((char(':'), space0, tuple_type, space0))),
+        tuple((char(':'), space0, tuple_type, space0)),
         space0,
         tuple((char('='), space0, variable_single, space0, char(';'))),
     ))(input)
@@ -751,13 +751,7 @@ fn binding_assignment_tuple_single(input: &str) -> IResult<&str, ast::Command> {
 
             let mut types;
             match t {
-                Some((_, _, ast::Type::Tuple(x), _)) => types = x,
-                None => {
-                    types = Vec::new();
-                    for _ in 0..(vars.len()) {
-                        types.push(ast::Type::Unknown);
-                    }
-                }
+                (_, _, ast::Type::Tuple(x), _) => types = x,
                 _ => {
                     panic!("Incorrect case")
                 }
@@ -822,7 +816,7 @@ fn binding_assignment_tuple_multiple(input: &str) -> IResult<&str, ast::Command>
             tag(")"),
         )),
         space0,
-        opt(tuple((char(':'), space0, tuple_type, space0))),
+        tuple((char(':'), space0, tuple_type, space0)),
         space0,
         tuple((char('='), space0, tuple_values, space0, char(';'))),
     ))(input)
@@ -855,13 +849,7 @@ fn binding_assignment_tuple_multiple(input: &str) -> IResult<&str, ast::Command>
 
             let mut types;
             match t {
-                Some((_, _, ast::Type::Tuple(x), _)) => types = x,
-                None => {
-                    types = Vec::new();
-                    for _ in 0..(vars.len()) {
-                        types.push(ast::Type::Unknown);
-                    }
-                }
+                (_, _, ast::Type::Tuple(x), _) => types = x,
                 _ => {
                     panic!("Incorrect case")
                 }
@@ -894,7 +882,7 @@ fn binding_assignment(input: &str) -> IResult<&str, ast::Command> {
         opt(tuple((tag("mut"), space1))),
         variable,
         space0,
-        opt(tuple((char(':'), space0, type_def, space0))),
+        tuple((char(':'), space0, type_def, space0)),
         alt((
             tuple((char('='), space0, array_content, space0, char(';'))),
             tuple((char('='), space0, tuple_values, space0, char(';'))),
@@ -906,22 +894,16 @@ fn binding_assignment(input: &str) -> IResult<&str, ast::Command> {
         )),
     ))(input)
     .and_then(|(next_input, x)| {
-        let (_, _, _, m, v, _, t, tu) = x;
+        let (_, _, _, m, v, _, (_, _, t, _), tu) = x;
         let (_, _, exp, _, _) = tu;
         let mu = match m {
             Some(_) => true,
             None => false,
         };
-        match t {
-            Some((_, _, t, _)) => Ok((
-                next_input,
-                ast::Command::Binding(ast::Binding::Assignment(v, t, exp, mu)),
-            )),
-            None => Ok((
-                next_input,
-                ast::Command::Binding(ast::Binding::Assignment(v, ast::Type::Unknown, exp, mu)),
-            )),
-        }
+        Ok((
+            next_input,
+            ast::Command::Binding(ast::Binding::Assignment(v, t, exp, mu)),
+        ))
     })
 }
 
@@ -933,26 +915,20 @@ fn binding_declaration(input: &str) -> IResult<&str, ast::Command> {
         opt(tuple((tag("mut"), space1))),
         variable,
         space0,
-        opt(tuple((char(':'), space0, type_def, space0))),
+        tuple((char(':'), space0, type_def, space0)),
         space0,
         char(';'),
     ))(input)
     .and_then(|(next_input, x)| {
-        let (_, _, _, m, v, _, t, _, _) = x;
+        let (_, _, _, m, v, _, (_, _, t, _), _, _) = x;
         let mu = match m {
             Some(_) => true,
             None => false,
         };
-        match t {
-            Some((_, _, t, _)) => Ok((
-                next_input,
-                ast::Command::Binding(ast::Binding::Declaration(v, t, mu)),
-            )),
-            None => Ok((
-                next_input,
-                ast::Command::Binding(ast::Binding::Declaration(v, ast::Type::Unknown, mu)),
-            )),
-        }
+        Ok((
+            next_input,
+            ast::Command::Binding(ast::Binding::Declaration(v, t, mu)),
+        ))
     })
 }
 
@@ -985,12 +961,15 @@ fn binding_declaration_tuple(input: &str) -> IResult<&str, ast::Command> {
             tag(")"),
         )),
         space0,
-        opt(tuple((char(':'), space0, tuple_type, space0))),
+        tuple((char(':'), space0, tuple_type, space0)),
         space0,
         char(';'),
     ))(input)
     .and_then(
-        |(next_input, (_, _, _, (_, _, fm, f, _, _, _, second, _, rest, _, _), _, t, _, _))| {
+        |(
+            next_input,
+            (_, _, _, (_, _, fm, f, _, _, _, second, _, rest, _, _), _, (_, _, t, _), _, _),
+        )| {
             let mut vars = Vec::new();
             let mut muts = Vec::new();
             vars.push(f);
@@ -1009,18 +988,9 @@ fn binding_declaration_tuple(input: &str) -> IResult<&str, ast::Command> {
                 muts.push(rm);
             }
 
-            let mut types;
-            match t {
-                Some((_, _, ast::Type::Tuple(x), _)) => types = x,
-                None => {
-                    types = Vec::new();
-                    for _ in 0..(vars.len()) {
-                        types.push(ast::Type::Unknown);
-                    }
-                }
-                _ => {
-                    panic!("Incorrect case")
-                }
+            let types = match t {
+                ast::Type::Tuple(x) => x,
+                _ => panic!("Incorrect case!"),
             };
 
             let mut result = Vec::new();
@@ -1300,8 +1270,13 @@ mod test {
         assert!(function("fn a ( ) {}").unwrap().0 == "");
         assert!(function("fn a ( ) { }").unwrap().0 == "");
         assert!(function("fn  a  ( ) { }").unwrap().0 == "");
-        assert!(function("fn a () {let a = 14;}").unwrap().0 == "");
-        assert!(function("fn a () {let a = 14; let c = 1 + b;}").unwrap().0 == "");
+        assert!(function("fn a () {let a: i32 = 14;}").unwrap().0 == "");
+        assert!(
+            function("fn a () {let a: i32 = 14; let c: i32 = 1 + b;}")
+                .unwrap()
+                .0
+                == ""
+        );
         let mut content = Vec::new();
         content.push(ast::Command::Binding(ast::Binding::Assignment(
             ast::Variable::Named("a".to_string()),
@@ -1471,8 +1446,8 @@ mod test {
 
     #[test]
     fn block1() {
-        assert!(block("let x = 1;").unwrap().0 == "");
-        assert!(block("let x = 1;//%assert a < 143\n").unwrap().0 == "");
+        assert!(block("let x: i32 = 1;").unwrap().0 == "");
+        assert!(block("let x: i32 = 1;//%assert a < 143\n").unwrap().0 == "");
     }
 
     #[test]
@@ -1489,7 +1464,7 @@ mod test {
 
     #[test]
     fn command2() {
-        assert!(command("let a = 14;").unwrap().0 == "");
+        assert!(command("let a: i32 = 14;").unwrap().0 == "");
     }
 
     #[test]
@@ -1595,9 +1570,9 @@ mod test {
 
     #[test]
     fn if_else1() {
-        assert!(if_else("if a == 12 {let b = 3;}").unwrap().0 == "");
+        assert!(if_else("if a == 12 {let b: i32 = 3;}").unwrap().0 == "");
         assert!(
-            if_else("if a == 12 {let b = 3;//%assert b == 3\n}")
+            if_else("if a == 12 {let b: i32 = 3;//%assert b == 3\n}")
                 .unwrap()
                 .0
                 == ""
@@ -1607,7 +1582,7 @@ mod test {
     #[test]
     fn if_else2() {
         assert!(
-            if_else("if a == 12 {let b = 3;} else if a == 13 {let b = 4;} else {let b = 1;}")
+            if_else("if a == 12 {let b: i32 = 3;} else if a == 13 {let b: i32 = 4;} else {let b: i32 = 1;}")
                 .unwrap()
                 .0
                 == ""
@@ -1616,9 +1591,11 @@ mod test {
 
     #[test]
     fn if_else3() {
-        let a = if_else("if a == 12 {let b = 3;} else if a == 13 {let b = 4;} else {let b = 1;}")
-            .unwrap()
-            .1;
+        let a = if_else(
+            "if a == 12 {let b: i32 = 3;} else if a == 13 {let b: i32 = 4;} else {let b: i32 = 1;}",
+        )
+        .unwrap()
+        .1;
 
         let mut conds = Vec::new();
         let mut comms = Vec::new();
@@ -1643,13 +1620,13 @@ mod test {
 
         comms_1.push(ast::Command::Binding(ast::Binding::Assignment(
             ast::Variable::Named("b".to_string()),
-            ast::Type::Unknown,
+            ast::Type::I32,
             ast::Value::Expr(ast::Expr::Number(3)),
             false,
         )));
         comms_2.push(ast::Command::Binding(ast::Binding::Assignment(
             ast::Variable::Named("b".to_string()),
-            ast::Type::Unknown,
+            ast::Type::I32,
             ast::Value::Expr(ast::Expr::Number(4)),
             false,
         )));
@@ -1659,7 +1636,7 @@ mod test {
 
         el.push(ast::Command::Binding(ast::Binding::Assignment(
             ast::Variable::Named("b".to_string()),
-            ast::Type::Unknown,
+            ast::Type::I32,
             ast::Value::Expr(ast::Expr::Number(1)),
             false,
         )));
@@ -1671,21 +1648,22 @@ mod test {
 
     #[test]
     fn if_else4() {
-        assert!(if_else("if a == 14 {\nlet c = 3;\n}").unwrap().0 == "");
+        assert!(if_else("if a == 14 {\nlet c: i32 = 3;\n}").unwrap().0 == "");
         assert!(
-            if_else("if a == 14 {\nlet c = 3;\n} else if a == 13 {\n   let c = a + 43;\n}")
-                .unwrap()
-                .0
-                == ""
+            if_else(
+                "if a == 14 {\nlet c: i32 = 3;\n} else if a == 13 {\n   let c: i32 = a + 43;\n}"
+            )
+            .unwrap()
+            .0 == ""
         );
-        assert!(if_else("if a == 14 {\nlet c = 3;\n} else if a == 13 {\n   let c = a + 43;\n} else {\n   let c = a + 123;\n}").unwrap().0 == "");
+        assert!(if_else("if a == 14 {\nlet c: i32 = 3;\n} else if a == 13 {\n   let c: i32 = a + 43;\n} else {\n   let c: i32 = a + 123;\n}").unwrap().0 == "");
     }
 
     #[test]
     fn single_if1() {
-        assert!(single_if("if a == 12 {let b = 3;}").unwrap().0 == "");
+        assert!(single_if("if a == 12 {let b: i32 = 3;}").unwrap().0 == "");
         assert!(
-            single_if("if a == 12 {let b = 3;//%assert b == 3\n}")
+            single_if("if a == 12 {let b: i32 = 3;//%assert b == 3\n}")
                 .unwrap()
                 .0
                 == ""
@@ -1807,9 +1785,10 @@ mod test {
     #[test]
     fn binding_assignment1() {
         assert!(binding_assignment("let x: i32 = 12;").unwrap().0 == "");
-        assert!(binding_assignment("let x = 12 * 4;").unwrap().0 == "");
-        assert!(binding_assignment("let y = 12 - 5 * 6;").unwrap().0 == "");
+        assert!(binding_assignment("let x: i32 = 12 * 4;").unwrap().0 == "");
+        assert!(binding_assignment("let y: i32 = 12 - 5 * 6;").unwrap().0 == "");
         assert!(binding_assignment("let z = 3").is_err());
+        assert!(binding_assignment("let z = 3;").is_err());
         assert!(
             binding_assignment("let mut z: i32 = 3;").unwrap().1
                 == ast::Command::Binding(ast::Binding::Assignment(
@@ -1839,7 +1818,7 @@ mod test {
                     false
                 ))
         );
-        assert!(binding_assignment("let c = a + 43;").unwrap().0 == "");
+        assert!(binding_assignment("let c: i32 = a + 43;").unwrap().0 == "");
         assert!(
             binding_assignment("let c: (i32, bool) = (12, false);")
                 .unwrap()
@@ -1856,10 +1835,10 @@ mod test {
         temp.push(ast::Value::Expr(ast::Expr::Number(4)));
 
         assert!(
-            binding_assignment("let x = [1,2, 4];").unwrap().1
+            binding_assignment("let x: [i32; 3] = [1,2, 4];").unwrap().1
                 == ast::Command::Binding(ast::Binding::Assignment(
                     ast::Variable::Named("x".to_string()),
-                    ast::Type::Unknown,
+                    ast::Type::Array(Box::new(ast::Type::I32), 3),
                     ast::Value::Array(temp),
                     false
                 ))
@@ -1871,10 +1850,12 @@ mod test {
         temp.push(ast::Value::Expr(ast::Expr::Number(4)));
 
         assert!(
-            binding_assignment("let mut x = [1,2, 4];").unwrap().1
+            binding_assignment("let mut x: [i32; 3] = [1,2, 4];")
+                .unwrap()
+                .1
                 == ast::Command::Binding(ast::Binding::Assignment(
                     ast::Variable::Named("x".to_string()),
-                    ast::Type::Unknown,
+                    ast::Type::Array(Box::new(ast::Type::I32), 3),
                     ast::Value::Array(temp),
                     true
                 ))
@@ -1886,10 +1867,12 @@ mod test {
         temp.push(ast::Value::Expr(ast::Expr::Number(4)));
 
         assert!(
-            binding_assignment("let mut x = [1,2, 4];").unwrap().1
+            binding_assignment("let mut x: [i32; 3] = [1,2, 4];")
+                .unwrap()
+                .1
                 == ast::Command::Binding(ast::Binding::Assignment(
                     ast::Variable::Named("x".to_string()),
-                    ast::Type::Unknown,
+                    ast::Type::Array(Box::new(ast::Type::I32), 3),
                     ast::Value::Array(temp),
                     true
                 ))
@@ -1987,48 +1970,51 @@ mod test {
     #[test]
     fn binding_assignment_tuple_multiple1() {
         assert!(
-            binding_assignment_tuple_multiple("let (x,) = (12,);")
+            binding_assignment_tuple_multiple("let (x,): (i32,) = (12,);")
                 .unwrap()
                 .0
                 == ""
         );
         assert!(
-            binding_assignment_tuple_multiple("let (x,y) = (12, true);")
+            binding_assignment_tuple_multiple("let (x,y): (i32, bool) = (12, true);")
                 .unwrap()
                 .0
                 == ""
         );
         assert!(
-            binding_assignment_tuple_multiple("let (x,y, _) = (12, true, false);")
-                .unwrap()
-                .0
-                == ""
+            binding_assignment_tuple_multiple(
+                "let (x,y, _): (i32, bool, bool) = (12, true, false);"
+            )
+            .unwrap()
+            .0 == ""
         );
         let mut temp = Vec::new();
         temp.push(ast::Command::Binding(ast::Binding::Assignment(
             ast::Variable::Named("x".to_string()),
-            ast::Type::Unknown,
+            ast::Type::I32,
             ast::Value::Expr(ast::Expr::Number(12)),
             true,
         )));
         temp.push(ast::Command::Binding(ast::Binding::Assignment(
             ast::Variable::Named("y".to_string()),
-            ast::Type::Unknown,
+            ast::Type::Bool,
             ast::Value::Bool(ast::Bool::True),
             false,
         )));
         temp.push(ast::Command::Binding(ast::Binding::Assignment(
             ast::Variable::Empty,
-            ast::Type::Unknown,
+            ast::Type::Bool,
             ast::Value::Bool(ast::Bool::False),
             false,
         )));
 
-        assert!(
-            binding_assignment_tuple_multiple("let (mut x,y, _) = (12, true, false);")
-                .unwrap()
-                .1
-                == ast::Command::Binding(ast::Binding::Tuple(temp))
+        assert_eq!(
+            binding_assignment_tuple_multiple(
+                "let (mut x,y, _): (i32, bool, bool) = (12, true, false);"
+            )
+            .unwrap()
+            .1,
+            ast::Command::Binding(ast::Binding::Tuple(temp))
         );
 
         let mut temp = Vec::new();
@@ -2063,7 +2049,7 @@ mod test {
     #[test]
     fn binding_declaration1() {
         assert!(binding_declaration("let x: i32;").unwrap().0 == "");
-        assert!(binding_declaration("let x;").unwrap().0 == "");
+        assert!(binding_declaration("let x: i32;").unwrap().0 == "");
         assert!(binding_declaration("let y: bool;").unwrap().0 == "");
         assert!(
             binding_declaration("let z:i32;").unwrap().1
@@ -2082,10 +2068,10 @@ mod test {
                 ))
         );
         assert!(
-            binding_declaration("let x;").unwrap().1
+            binding_declaration("let x: i32;").unwrap().1
                 == ast::Command::Binding(ast::Binding::Declaration(
                     ast::Variable::Named("x".to_string()),
-                    ast::Type::Unknown,
+                    ast::Type::I32,
                     false
                 ))
         );
@@ -2097,17 +2083,19 @@ mod test {
         let mut temp = Vec::new();
         temp.push(ast::Command::Binding(ast::Binding::Declaration(
             ast::Variable::Named("a".to_string()),
-            ast::Type::Unknown,
+            ast::Type::I32,
             false,
         )));
         temp.push(ast::Command::Binding(ast::Binding::Declaration(
             ast::Variable::Named("b".to_string()),
-            ast::Type::Unknown,
+            ast::Type::I32,
             true,
         )));
-        assert!(
-            binding_declaration_tuple("let (a, mut b);").unwrap().1
-                == ast::Command::Binding(ast::Binding::Tuple(temp))
+        assert_eq!(
+            binding_declaration_tuple("let (a, mut b): (i32, i32);")
+                .unwrap()
+                .1,
+            ast::Command::Binding(ast::Binding::Tuple(temp))
         );
 
         let mut temp = Vec::new();
@@ -2121,11 +2109,11 @@ mod test {
             ast::Type::Bool,
             true,
         )));
-        assert!(
+        assert_eq!(
             binding_declaration_tuple("let (a, mut b): (i32, bool);")
                 .unwrap()
-                .1
-                == ast::Command::Binding(ast::Binding::Tuple(temp))
+                .1,
+            ast::Command::Binding(ast::Binding::Tuple(temp))
         );
     }
 
@@ -2214,38 +2202,38 @@ mod test {
         let mut temp = Vec::new();
         temp.push(ast::Command::Binding(ast::Binding::Assignment(
             ast::Variable::Named("x".to_string()),
-            ast::Type::Unknown,
+            ast::Type::I32,
             ast::Value::Expr(ast::Expr::Number(1)),
             false,
         )));
 
-        assert!(
-            for_parse("for i in 0..b {let x = 1;}").unwrap().1
-                == ast::Command::Block(ast::Block::ForRange(
-                    ast::Variable::Named("i".to_string()),
-                    ast::Value::Expr(ast::Expr::Number(0)),
-                    ast::Value::Variable(ast::Variable::Named("b".to_string())),
-                    temp
-                ))
+        assert_eq!(
+            for_parse("for i in 0..b {let x: i32 = 1;}").unwrap().1,
+            ast::Command::Block(ast::Block::ForRange(
+                ast::Variable::Named("i".to_string()),
+                ast::Value::Expr(ast::Expr::Number(0)),
+                ast::Value::Variable(ast::Variable::Named("b".to_string())),
+                temp
+            ))
         );
 
         let mut temp = Vec::new();
         temp.push(ast::Command::Binding(ast::Binding::Assignment(
             ast::Variable::Named("x".to_string()),
-            ast::Type::Unknown,
+            ast::Type::I32,
             ast::Value::Expr(ast::Expr::Number(1)),
             false,
         )));
 
         temp.push(ast::Command::Binding(ast::Binding::Assignment(
             ast::Variable::Named("y".to_string()),
-            ast::Type::Unknown,
+            ast::Type::Bool,
             ast::Value::Bool(ast::Bool::True),
             false,
         )));
 
         assert!(
-            for_parse("for i in 0..b {let x = 1; let y = true;}")
+            for_parse("for i in 0..b {let x: i32 = 1; let y: bool = true;}")
                 .unwrap()
                 .1
                 == ast::Command::Block(ast::Block::ForRange(

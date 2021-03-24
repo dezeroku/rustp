@@ -1,12 +1,12 @@
 fn main() {
-    let a = 12;
-    let b = 3 + a;
+    let a: i32 = 12;
+    let b: i32 = 3 + a;
     for i in 0..10 {
         let x: i32 = 3;
     }
 
     //%assert a == 12
-    let l = c(12);
+    let l: bool = c(12);
 
     if l {
         let g: i32 = 3;
@@ -20,7 +20,7 @@ fn main() {
 
 //%postcondition return_value
 fn c(i: i32) -> bool {
-    let x = true;
+    let x: bool = true;
     if 1 == 2 {
         let y: bool = true;
     }
