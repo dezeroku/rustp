@@ -749,9 +749,8 @@ fn binding_assignment_tuple_single(input: &str) -> IResult<&str, ast::Command> {
                 muts.push(rm);
             }
 
-            let mut types;
-            match t {
-                (_, _, ast::Type::Tuple(x), _) => types = x,
+            let types = match t {
+                (_, _, ast::Type::Tuple(x), _) => x,
                 _ => {
                     panic!("Incorrect case")
                 }
@@ -847,9 +846,8 @@ fn binding_assignment_tuple_multiple(input: &str) -> IResult<&str, ast::Command>
                 muts.push(rm);
             }
 
-            let mut types;
-            match t {
-                (_, _, ast::Type::Tuple(x), _) => types = x,
+            let types = match t {
+                (_, _, ast::Type::Tuple(x), _) => x,
                 _ => {
                     panic!("Incorrect case")
                 }
