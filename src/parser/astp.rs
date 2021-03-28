@@ -243,7 +243,14 @@ fn multiline_comment(input: &str) -> IResult<&str, &str> {
 }
 
 fn command(input: &str) -> IResult<&str, ast::Command> {
-    alt((binding, prove_control, assignment, if_else, for_parse))(input)
+    alt((
+        binding,
+        prove_control,
+        assignment,
+        if_else,
+        while_parse,
+        for_parse,
+    ))(input)
 }
 
 fn assignment(input: &str) -> IResult<&str, ast::Command> {
@@ -424,6 +431,26 @@ fn for_parse(input: &str) -> IResult<&str, ast::Command> {
             ))
         },
     )
+}
+
+fn while_parse(input: &str) -> IResult<&str, ast::Command> {
+    tuple((
+        tag("while"),
+        space1,
+        boolean::expr,
+        space0,
+        tag("{"),
+        multispace0,
+        block,
+        multispace0,
+        tag("}"),
+    ))(input)
+    .and_then(|(next_input, (_, _, c, _, _, _, comms, _, _))| {
+        Ok((
+            next_input,
+            ast::Command::Block(ast::Block::While(*c, comms)),
+        ))
+    })
 }
 
 fn if_else(input: &str) -> IResult<&str, ast::Command> {
@@ -2173,6 +2200,32 @@ mod test {
         assert!(tuple_unpack_left("(true)").is_err());
         assert!(tuple_unpack_left("(t, a)").unwrap().0 == "");
         assert!(tuple_unpack_left("(t, a, _)").unwrap().0 == "");
+    }
+
+    #[test]
+    fn while_parse1() {
+        assert!(
+            while_parse("while i {}").unwrap().1
+                == ast::Command::Block(ast::Block::While(
+                    ast::Bool::Value(Box::new(ast::Value::Variable(ast::Variable::Named(
+                        String::from("i")
+                    )))),
+                    Vec::new()
+                ))
+        );
+
+        let mut temp = Vec::new();
+        temp.push(ast::Command::Binding(ast::Binding::Assignment(
+            ast::Variable::Named("x".to_string()),
+            ast::Type::I32,
+            ast::Value::Expr(ast::Expr::Number(1)),
+            false,
+        )));
+
+        assert_eq!(
+            while_parse("while true {let x: i32 = 1;}").unwrap().1,
+            ast::Command::Block(ast::Block::While(ast::Bool::True, temp))
+        );
     }
 
     #[test]

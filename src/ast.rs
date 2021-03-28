@@ -260,6 +260,7 @@ pub enum Block {
     If(Vec<Bool>, Vec<Vec<Command>>, Vec<Command>),
     /// iterator's name, first range elem, second range elem, commands
     ForRange(Variable, Value, Value, Vec<Command>),
+    While(Bool, Vec<Command>),
 }
 
 impl fmt::Display for Block {
@@ -281,6 +282,14 @@ impl fmt::Display for Block {
                 }
 
                 write!(f, "for {} in range {}..{} (\n{}\n)", i, a, b, temp)
+            }
+            Block::While(c, comms) => {
+                let mut temp = String::new();
+                for i in comms.iter() {
+                    temp += &format!("{}", i).to_owned();
+                }
+
+                write!(f, "while {} (\n{}\n)", c, temp)
             }
         }
     }

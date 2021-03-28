@@ -16,6 +16,10 @@ fn main() {
 
     for i in 0..12 {}
     //%assert c(c(c(c(3)))) == 132
+
+    while true {
+        let z: bool = false;
+    }
 }
 
 //%postcondition return_value
