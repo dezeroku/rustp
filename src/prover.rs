@@ -1,110 +1,60 @@
 use crate::ast::*;
+use crate::context;
 use std::collections::HashMap;
+use z3;
 
 pub fn prove(input: Program) {
     // Create context for each command and try to prove it individually?
     // All that we have to prove are assertions, all the rest just modifies context.
 
     // For now just display everything here when it happens.
-    for func in input.content {
-        let mut temp = func.content;
-        if func.output != Type::Unit {
+    for func in input.content.clone() {
+        let mut temp = func.content.clone();
+        if func.output.clone() != Type::Unit {
             temp.push(Command::Binding(Binding::Assignment(
                 Variable::Named(String::from("return_value")),
-                func.output,
-                func.return_value,
+                func.output.clone(),
+                func.return_value.clone(),
                 false,
             )));
         }
 
         temp.push(Command::ProveControl(ProveControl::Assert(
-            func.postcondition,
+            func.postcondition.clone(),
         )));
 
-        let con = create_context_func(temp, HashMap::new(), func.precondition);
+        let con = context::get_context_func(func, input.clone());
         // Try to prove
-        println!("{:?}", con);
-    }
-}
+        //println!("{:?}", con);
 
-fn create_context_func(
-    content: Vec<Command>,
-    mut state: HashMap<Variable, Val>,
-    known: Bool,
-) -> Vec<Context> {
-    let mut result = Vec::new();
-
-    for comm in content {
-        match comm {
-            Command::ProveControl(_) => {
-                result.push(Context {
-                    command: comm,
-                    state: state.clone(),
-                    known: known.clone(),
-                });
-            }
-            Command::Binding(Binding::Declaration(_, _, _)) => {
-                // TODO:
-            }
-            Command::Binding(Binding::Assignment(name, t, v, _)) => {
-                //result.push(Context {
-                //    command: comm,
-                //    state: state.clone(),
-                //});
-
-                state.insert(name, Val { v: v, t: t });
-            }
-            Command::Binding(Binding::Tuple(vec)) => {
-                for dec in vec {
-                    match dec {
-                        Command::Binding(Binding::Declaration(name, _, _)) => {
-                            // TODO:
-                        }
-                        Command::Binding(Binding::Assignment(name, t, v, _)) => {
-                            state.insert(name, Val { v: v, t: t });
-                        }
-                        _ => {}
-                    }
-                }
-            }
-            Command::Block(Block::If(_, blocks, el)) => {
-                // TODO:
-                //let mut temp = blocks;
-                //temp.push(el);
-
-                //for block in temp {
-                //    let mut state = definitions.clone();
-                //    if !no_shadowing_logic(block, &mut state) {
-                //        return false;
-                //    }
-                //}
-            }
-            Command::Block(Block::ForRange(iter, _, _, vec)) => {
-                //let mut temp = definitions.clone();
-                //if !no_shadowing_check(&mut temp, iter) {
-                //    return false;
-                //}
-
-                //if !no_shadowing_logic(vec, &mut temp) {
-                //    return false;
-                //}
-            }
-            _ => {}
+        for frame in con {
+            prove_frame(frame)
         }
     }
 
-    return result;
+    println!("START");
+    let mut cfg = z3::Config::new();
+    cfg.set_model_generation(true);
+    cfg.set_proof_generation(true);
+    let ctx = z3::Context::new(&cfg);
+    // TODO: use goal?
+    //let t = z3::Goal::new(&ctx, true, false, false);
+    //t.assert(&z3::ast::Ast());
+    let t = z3::Solver::new(&ctx);
+    let b = z3::ast::Bool::new_const(&ctx, "b");
+    let c = z3::ast::Bool::new_const(&ctx, "c");
+    let d = z3::ast::Bool::new_const(&ctx, "d");
+    t.assert(&z3::ast::Bool::and(&ctx, &[&b, &c]));
+    t.assert(&z3::ast::Bool::and(&ctx, &[&c, &d]));
+    //t.assert(&z3::ast::Bool::not(&z3::ast::Bool::and(&ctx, &[&c, &d])));
+    //t.assert(&z3::ast::Bool::from_bool(&ctx, c == d));
+    let f = t.check();
+    println!("{:?}", f);
+    println!("{:?}", t.get_model());
+    //println!("{:?}", t.get_proof());
+    println!("DONE");
 }
 
-#[derive(PartialEq, Clone, Debug)]
-struct Context {
-    command: Command,
-    state: HashMap<Variable, Val>,
-    known: Bool,
-}
-
-#[derive(PartialEq, Clone, Debug)]
-struct Val {
-    v: Value,
-    t: Type,
+fn prove_frame(frame: context::Frame) {
+    // convert to Z3 problem and run it
 }

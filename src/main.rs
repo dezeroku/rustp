@@ -119,10 +119,12 @@ fn main() {
     prover::prove(simplified.clone());
 
     println!();
-    for func in simplified.content.clone() {
-        for i in context::get_context_func(func, simplified.clone()) {
-            println!("{:?}", i);
-            println!();
+    if verbosity >= 2 {
+        for func in simplified.content.clone() {
+            for i in context::get_context_func(func, simplified.clone()) {
+                println!("{:?}", i);
+                println!();
+            }
         }
     }
     //fs::write("./example.z3", val).expect("Unable to write file");
