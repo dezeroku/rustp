@@ -26,9 +26,9 @@ pub enum Bool {
     False,
     Equal(Expr, Expr),
     GreaterEqual(Expr, Expr),
-    SmallerEqual(Expr, Expr),
-    Greater(Expr, Expr),
-    Smaller(Expr, Expr),
+    LowerEqual(Expr, Expr),
+    GreaterThan(Expr, Expr),
+    LowerThan(Expr, Expr),
 }
 
 impl fmt::Display for Bool {
@@ -41,10 +41,10 @@ impl fmt::Display for Bool {
             Bool::True => write!(f, "true"),
             Bool::False => write!(f, "false"),
             Bool::Equal(a, b) => write!(f, "{} == {}", a, b),
-            Bool::Greater(a, b) => write!(f, "{} > {}", a, b),
-            Bool::Smaller(a, b) => write!(f, "{} < {}", a, b),
+            Bool::GreaterThan(a, b) => write!(f, "{} > {}", a, b),
+            Bool::LowerThan(a, b) => write!(f, "{} < {}", a, b),
             Bool::GreaterEqual(a, b) => write!(f, "{} >= {}", a, b),
-            Bool::SmallerEqual(a, b) => write!(f, "{} <= {}", a, b),
+            Bool::LowerEqual(a, b) => write!(f, "{} <= {}", a, b),
         }
     }
 }
@@ -239,7 +239,7 @@ pub enum Opcode {
     Add,
     Sub,
     /// The % in rust is actually remainder, not modulo
-    Mod,
+    Rem,
 }
 
 impl fmt::Display for Opcode {
@@ -249,7 +249,7 @@ impl fmt::Display for Opcode {
             Opcode::Div => write!(f, "/"),
             Opcode::Add => write!(f, "+"),
             Opcode::Sub => write!(f, "-"),
-            Opcode::Mod => write!(f, "%"),
+            Opcode::Rem => write!(f, "%"),
         }
     }
 }

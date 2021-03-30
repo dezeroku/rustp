@@ -120,7 +120,7 @@ fn factor_compare_greater(input: &str) -> IResult<&str, Box<ast::Bool>> {
     tuple((math::expr, space0, tag(">"), space0, math::expr))(input).and_then(
         |(next_input, res)| {
             let (a, _, _, _, b) = res;
-            Ok((next_input, Box::new(ast::Bool::Greater(*a, *b))))
+            Ok((next_input, Box::new(ast::Bool::GreaterThan(*a, *b))))
         },
     )
 }
@@ -129,7 +129,7 @@ fn factor_compare_smaller_equal(input: &str) -> IResult<&str, Box<ast::Bool>> {
     tuple((math::expr, space0, tag("<="), space0, math::expr))(input).and_then(
         |(next_input, res)| {
             let (a, _, _, _, b) = res;
-            Ok((next_input, Box::new(ast::Bool::SmallerEqual(*a, *b))))
+            Ok((next_input, Box::new(ast::Bool::LowerEqual(*a, *b))))
         },
     )
 }
@@ -137,7 +137,7 @@ fn factor_compare_smaller(input: &str) -> IResult<&str, Box<ast::Bool>> {
     tuple((math::expr, space0, tag("<"), space0, math::expr))(input).and_then(
         |(next_input, res)| {
             let (a, _, _, _, b) = res;
-            Ok((next_input, Box::new(ast::Bool::Smaller(*a, *b))))
+            Ok((next_input, Box::new(ast::Bool::LowerThan(*a, *b))))
         },
     )
 }
@@ -290,7 +290,7 @@ mod test {
     fn factor_compare_smaller_equal1() {
         assert!(
             factor_compare_smaller_equal("12 <= 43").unwrap().1
-                == Box::new(ast::Bool::SmallerEqual(
+                == Box::new(ast::Bool::LowerEqual(
                     ast::Expr::Number(12),
                     ast::Expr::Number(43)
                 ))
@@ -298,7 +298,7 @@ mod test {
 
         assert!(
             factor_compare_smaller_equal("a <= (b + 3)").unwrap().1
-                == Box::new(ast::Bool::SmallerEqual(
+                == Box::new(ast::Bool::LowerEqual(
                     ast::Expr::Value(Box::new(ast::Value::Variable(ast::Variable::Named(
                         "a".to_string()
                     )))),
@@ -317,7 +317,7 @@ mod test {
     fn factor_compare_greater1() {
         assert!(
             factor_compare_greater("12 > 43").unwrap().1
-                == Box::new(ast::Bool::Greater(
+                == Box::new(ast::Bool::GreaterThan(
                     ast::Expr::Number(12),
                     ast::Expr::Number(43)
                 ))
@@ -325,7 +325,7 @@ mod test {
 
         assert!(
             factor_compare_greater("a > (b + 3)").unwrap().1
-                == Box::new(ast::Bool::Greater(
+                == Box::new(ast::Bool::GreaterThan(
                     ast::Expr::Value(Box::new(ast::Value::Variable(ast::Variable::Named(
                         "a".to_string()
                     )))),
@@ -344,7 +344,7 @@ mod test {
     fn factor_compare_smaller1() {
         assert!(
             factor_compare_smaller("12 < 43").unwrap().1
-                == Box::new(ast::Bool::Smaller(
+                == Box::new(ast::Bool::LowerThan(
                     ast::Expr::Number(12),
                     ast::Expr::Number(43)
                 ))
@@ -352,7 +352,7 @@ mod test {
 
         assert!(
             factor_compare_smaller("a < (b + 3)").unwrap().1
-                == Box::new(ast::Bool::Smaller(
+                == Box::new(ast::Bool::LowerThan(
                     ast::Expr::Value(Box::new(ast::Value::Variable(ast::Variable::Named(
                         "a".to_string()
                     )))),

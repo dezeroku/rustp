@@ -203,15 +203,15 @@ fn _get_vals_bool(z: Bool, mut decs: &mut Vec<Val>) {
             _get_vals_expr(a, &mut decs);
             _get_vals_expr(b, &mut decs);
         }
-        Bool::SmallerEqual(a, b) => {
+        Bool::LowerEqual(a, b) => {
             _get_vals_expr(a, &mut decs);
             _get_vals_expr(b, &mut decs);
         }
-        Bool::Greater(a, b) => {
+        Bool::GreaterThan(a, b) => {
             _get_vals_expr(a, &mut decs);
             _get_vals_expr(b, &mut decs);
         }
-        Bool::Smaller(a, b) => {
+        Bool::LowerThan(a, b) => {
             _get_vals_expr(a, &mut decs);
             _get_vals_expr(b, &mut decs);
         }

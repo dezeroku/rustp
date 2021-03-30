@@ -135,11 +135,31 @@ fn add_variable(var: Variable, t: Type, v: Value, ctx: &z3::Context) -> (String,
     }
 }
 
-trait Provable {
+trait ProvableBool {
     fn as_bool<'a>(self, ctx: &'a z3::Context) -> z3::ast::Bool<'a>;
 }
 
-impl Provable for Bool {
+trait ProvableInt {
+    fn as_int<'a>(self, ctx: &'a z3::Context) -> z3::ast::Int<'a>;
+}
+
+impl ProvableInt for Expr {
+    fn as_int<'a>(self, ctx: &'a z3::Context) -> z3::ast::Int<'a> {
+        match self {
+            Expr::Number(a) => z3::ast::Int::from_i64(ctx, a.into()),
+            Expr::Op(a, op, b) => match op {
+                Opcode::Add => z3::ast::Int::add(ctx, &[&a.as_int(ctx), &b.as_int(ctx)]),
+                Opcode::Sub => z3::ast::Int::sub(ctx, &[&a.as_int(ctx), &b.as_int(ctx)]),
+                Opcode::Mul => z3::ast::Int::mul(ctx, &[&a.as_int(ctx), &b.as_int(ctx)]),
+                Opcode::Div => a.as_int(ctx).div(&b.as_int(ctx)),
+                Opcode::Rem => a.as_int(ctx).rem(&b.as_int(ctx)),
+            },
+            Expr::Value(a) => unimplemented!(),
+        }
+    }
+}
+
+impl ProvableBool for Bool {
     fn as_bool<'a>(self, ctx: &'a z3::Context) -> z3::ast::Bool<'a> {
         match self {
             Bool::True => (z3::ast::Bool::from_bool(&ctx, true)),
@@ -149,22 +169,27 @@ impl Provable for Bool {
                 let b: Bool = *_b;
                 z3::ast::Bool::and(ctx, &[&a.as_bool(ctx), &b.as_bool(ctx)])
             }
-            _ => unimplemented!(),
+            Bool::Or(_a, _b) => {
+                let a: Bool = *_a;
+                let b: Bool = *_b;
+                z3::ast::Bool::or(ctx, &[&a.as_bool(ctx), &b.as_bool(ctx)])
+            }
+            Bool::Not(a) => z3::ast::Bool::not(&a.as_bool(ctx)),
+            Bool::Equal(a, b) => z3::ast::Bool::and(
+                ctx,
+                &[
+                    &a.clone().as_int(ctx).ge(&b.clone().as_int(ctx)),
+                    &a.as_int(ctx).le(&b.as_int(ctx)),
+                ],
+            ),
+            Bool::GreaterEqual(a, b) => a.as_int(ctx).ge(&b.as_int(ctx)),
+            Bool::LowerEqual(a, b) => a.as_int(ctx).le(&b.as_int(ctx)),
+            Bool::GreaterThan(a, b) => a.as_int(ctx).gt(&b.as_int(ctx)),
+            Bool::LowerThan(a, b) => a.as_int(ctx).lt(&b.as_int(ctx)),
+            Bool::Value(v) => unimplemented!(),
         }
     }
 }
-
-//    And(Box<Bool>, Box<Bool>),
-//    Or(Box<Bool>, Box<Bool>),
-//    Not(Box<Bool>),
-//    Value(Box<Value>),
-//    True,
-//    False,
-//    Equal(Expr, Expr),
-//    GreaterEqual(Expr, Expr),
-//    SmallerEqual(Expr, Expr),
-//    Greater(Expr, Expr),
-//    Smaller(Expr, Expr),
 
 trait ProvableCommand {
     fn as_bool<'a>(self, ctx: &'a z3::Context) -> (bool, z3::ast::Bool<'a>);
@@ -183,5 +208,84 @@ impl ProvableCommand for Command {
                 (false, z3::ast::Bool::from_bool(&ctx, true))
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn prove_frame1() {
+        let com = Command::ProveControl(ProveControl::Assert(Bool::True));
+        let frame = context::Frame {
+            command: com,
+            funcs: Vec::new(),
+            vals: Vec::new(),
+            vars: Vec::new(),
+        };
+
+        assert_eq!(prove_frame(frame), Some(z3::SatResult::Sat));
+    }
+
+    #[test]
+    fn prove_frame2() {
+        let com = Command::ProveControl(ProveControl::Assert(Bool::False));
+        let frame = context::Frame {
+            command: com,
+            funcs: Vec::new(),
+            vals: Vec::new(),
+            vars: Vec::new(),
+        };
+
+        assert_eq!(prove_frame(frame), Some(z3::SatResult::Unsat));
+    }
+
+    #[test]
+    fn prove_frame3() {
+        let com = Command::ProveControl(ProveControl::Assert(Bool::And(
+            Box::new(Bool::True),
+            Box::new(Bool::True),
+        )));
+        let frame = context::Frame {
+            command: com,
+            funcs: Vec::new(),
+            vals: Vec::new(),
+            vars: Vec::new(),
+        };
+
+        assert_eq!(prove_frame(frame), Some(z3::SatResult::Sat));
+    }
+
+    #[test]
+    fn prove_frame4() {
+        let com = Command::ProveControl(ProveControl::Assert(Bool::And(
+            Box::new(Bool::True),
+            Box::new(Bool::False),
+        )));
+        let frame = context::Frame {
+            command: com,
+            funcs: Vec::new(),
+            vals: Vec::new(),
+            vars: Vec::new(),
+        };
+
+        assert_eq!(prove_frame(frame), Some(z3::SatResult::Unsat));
+    }
+
+    #[test]
+    fn prove_frame5() {
+        let com = Command::ProveControl(ProveControl::Assert(Bool::Or(
+            Box::new(Bool::True),
+            Box::new(Bool::False),
+        )));
+        let frame = context::Frame {
+            command: com,
+            funcs: Vec::new(),
+            vals: Vec::new(),
+            vars: Vec::new(),
+        };
+
+        assert_eq!(prove_frame(frame), Some(z3::SatResult::Sat));
     }
 }

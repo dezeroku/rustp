@@ -119,7 +119,7 @@ fn mult_or_divide_or_mod(input: &str) -> IResult<&str, ast::Opcode> {
                 match res {
                     '*' => ast::Opcode::Mul,
                     '/' => ast::Opcode::Div,
-                    '%' => ast::Opcode::Mod,
+                    '%' => ast::Opcode::Rem,
                     _ => unimplemented!(),
                 },
             ))
@@ -282,7 +282,7 @@ mod test {
             *expr("12 % 3").unwrap().1
                 == *Box::new(ast::Expr::Op(
                     Box::new(ast::Expr::Number(12)),
-                    ast::Opcode::Mod,
+                    ast::Opcode::Rem,
                     Box::new(ast::Expr::Number(3))
                 ))
         );
