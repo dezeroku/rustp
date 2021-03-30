@@ -8,6 +8,8 @@ fn main() {
     println!("{}", b);
 
     for i in 0..12 {}
-    // %assert b == 15
-    //%assert 15 > 13 && 7 == 7
+    //%assert a == 12
+    //%assert b == 15
+    //%assert b == a + 3
+    // %assert 15 > 13 && 7 == 7
 }

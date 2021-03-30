@@ -41,40 +41,40 @@ pub fn prove(input: Program) -> bool {
         }
     }
 
-    println!("START");
-    // Idea:
-    // declare constants for all identifiers that are there (variables)
-    // use asserts to assign values
-    // assert the assertion in the end
-    // try to check it
+    //println!("START");
+    //// Idea:
+    //// declare constants for all identifiers that are there (variables)
+    //// use asserts to assign values
+    //// assert the assertion in the end
+    //// try to check it
 
-    let mut cfg = z3::Config::new();
-    cfg.set_model_generation(true);
-    //let te: i32 = 20;
-    let ctx = z3::Context::new(&cfg);
-    //// TODO: use goal?
-    ////let t = z3::Goal::new(&ctx, true, false, false);
-    ////t.assert(&z3::ast::Ast());
-    let t = z3::Solver::new(&ctx);
-    //let b = z3::ast::Bool::new_const(&ctx, "b");
-    //let c = z3::ast::Bool::new_const(&ctx, "c");
-    //let d = z3::ast::Bool::new_const(&ctx, "d");
-    let x = z3::ast::Int::new_const(&ctx, "x");
-    let y = z3::ast::Int::new_const(&ctx, "y");
-    //t.assert(&z3::ast::Bool::and(&ctx, &[&b, &c]));
-    //t.assert(&z3::ast::Bool::and(&ctx, &[&c, &d]));
-    t.assert(&x.gt(&y));
-    let x = z3::ast::Int::new_const(&ctx, "x");
-    t.assert(&x.gt(&z3::ast::Int::from_i64(&ctx, 123)));
-    t.assert(&y.gt(&z3::ast::Int::from_i64(&ctx, 180)));
-    //t.assert(&y.gt(&z3::ast::Int::from_i64(&ctx, te.into())));
-    ////t.assert(&z3::ast::Bool::not(&z3::ast::Bool::and(&ctx, &[&c, &d])));
-    ////t.assert(&z3::ast::Bool::from_bool(&ctx, c == d));
-    let f = t.check();
-    println!("{:?}", f);
-    println!("{:?}", t.get_model());
-    ////println!("{:?}", t.get_proof());
-    println!("DONE");
+    //let mut cfg = z3::Config::new();
+    //cfg.set_model_generation(true);
+    ////let te: i32 = 20;
+    //let ctx = z3::Context::new(&cfg);
+    ////// TODO: use goal?
+    //////let t = z3::Goal::new(&ctx, true, false, false);
+    //////t.assert(&z3::ast::Ast());
+    //let t = z3::Solver::new(&ctx);
+    ////let b = z3::ast::Bool::new_const(&ctx, "b");
+    ////let c = z3::ast::Bool::new_const(&ctx, "c");
+    ////let d = z3::ast::Bool::new_const(&ctx, "d");
+    //let x = z3::ast::Int::new_const(&ctx, "x");
+    //let y = z3::ast::Int::new_const(&ctx, "y");
+    ////t.assert(&z3::ast::Bool::and(&ctx, &[&b, &c]));
+    ////t.assert(&z3::ast::Bool::and(&ctx, &[&c, &d]));
+    //t.assert(&x.gt(&y));
+    //let x = z3::ast::Int::new_const(&ctx, "x");
+    //t.assert(&x.gt(&z3::ast::Int::from_i64(&ctx, 123)));
+    //t.assert(&y.gt(&z3::ast::Int::from_i64(&ctx, 180)));
+    ////t.assert(&y.gt(&z3::ast::Int::from_i64(&ctx, te.into())));
+    //////t.assert(&z3::ast::Bool::not(&z3::ast::Bool::and(&ctx, &[&c, &d])));
+    //////t.assert(&z3::ast::Bool::from_bool(&ctx, c == d));
+    //let f = t.check();
+    //println!("{:?}", f);
+    //println!("{:?}", t.get_model());
+    //////println!("{:?}", t.get_proof());
+    //println!("DONE");
     true
 }
 
@@ -104,17 +104,17 @@ fn prove_frame(frame: context::Frame) -> Option<z3::SatResult> {
 fn _prove_frame(frame: context::Frame, ctx: &z3::Context, sol: &z3::Solver) -> bool {
     // convert to Z3 problem and run it
     // for all the variables that we have, define them and assert their value
-    let mut vars_int = HashMap::new();
+    //let mut vars_int = HashMap::new();
     let vars = frame.vars.clone();
     for context::Var { n, t, v } in vars {
-        let (name, var) = add_variable(n, t, v, &ctx);
+        add_variable(n, t, v, &ctx, sol);
         // TODO: the add_variable should also handle setting the correct value based on input type
         // TODO: assign proper val
         // so we need to be able to convert value into z3 int/bool
-        let val = 1;
-        sol.assert(&var.ge(&z3::ast::Int::from_i64(&ctx, val)));
-        sol.assert(&var.le(&z3::ast::Int::from_i64(&ctx, val)));
-        vars_int.insert(name, var);
+        //let val = 1;
+        //sol.assert(&var.ge(&z3::ast::Int::from_i64(&ctx, val)));
+        //sol.assert(&var.le(&z3::ast::Int::from_i64(&ctx, val)));
+        //vars_int.insert(name, var);
     }
 
     // TODO: run the assertion to provea
@@ -126,12 +126,18 @@ fn _prove_frame(frame: context::Frame, ctx: &z3::Context, sol: &z3::Solver) -> b
     needed
 }
 
-fn add_variable(var: Variable, t: Type, v: Value, ctx: &z3::Context) -> (String, z3::ast::Int) {
+fn add_variable(var: Variable, t: Type, v: Value, ctx: &z3::Context, sol: &z3::Solver) {
     match t {
         Type::I32 => match var.clone() {
             Variable::Named(name) => {
-                let t = z3::ast::Int::new_const(ctx, name.clone());
-                (name, t)
+                //let t = z3::ast::Int::new_const(ctx, name);
+                sol.assert(
+                    &Bool::Equal(
+                        Expr::Value(Box::new(Value::Variable(var))),
+                        Expr::Value(Box::new(v)),
+                    )
+                    .as_bool(ctx),
+                );
             }
             _ => unimplemented!(),
         },
@@ -146,13 +152,45 @@ trait ProvableValue {
 
 impl ProvableValue for Value {
     fn as_bool<'a>(self, ctx: &'a z3::Context) -> z3::ast::Bool<'a> {
-        // TODO: implement
-        z3::ast::Bool::from_bool(ctx, false)
+        match self {
+            Value::Expr(e) => panic!("Bool value used as an int: {}", e),
+            Value::Bool(b) => b.as_bool(ctx),
+            Value::Variable(x) => match x {
+                Variable::Named(name) => z3::ast::Bool::new_const(ctx, name),
+                Variable::Empty => unimplemented!(),
+                Variable::ArrayElem(name, ind) => unimplemented!(),
+                Variable::TupleElem(name, ind) => unimplemented!(),
+            },
+            Value::Tuple(t) => unimplemented!(),
+            Value::Array(a) => unimplemented!(),
+            Value::FunctionCall(name, args) => unimplemented!(),
+            Value::Reference(v) => unimplemented!(),
+            Value::ReferenceMutable(v) => unimplemented!(),
+            Value::Dereference(v) => unimplemented!(),
+            Value::Unit => unimplemented!(),
+            Value::Unknown => unimplemented!(),
+        }
     }
 
     fn as_int<'a>(self, ctx: &'a z3::Context) -> z3::ast::Int<'a> {
-        // TODO: implement
-        z3::ast::Int::from_i64(ctx, -1)
+        match self {
+            Value::Expr(e) => e.as_int(ctx),
+            Value::Bool(b) => panic!("Bool value used as an int"),
+            Value::Variable(x) => match x {
+                Variable::Named(name) => z3::ast::Int::new_const(ctx, name),
+                Variable::Empty => unimplemented!(),
+                Variable::ArrayElem(name, ind) => unimplemented!(),
+                Variable::TupleElem(name, ind) => unimplemented!(),
+            },
+            Value::Tuple(t) => unimplemented!(),
+            Value::Array(a) => unimplemented!(),
+            Value::FunctionCall(name, args) => unimplemented!(),
+            Value::Reference(v) => unimplemented!(),
+            Value::ReferenceMutable(v) => unimplemented!(),
+            Value::Dereference(v) => unimplemented!(),
+            Value::Unit => unimplemented!(),
+            Value::Unknown => unimplemented!(),
+        }
     }
 }
 
