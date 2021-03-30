@@ -3,7 +3,7 @@ use crate::context;
 use std::collections::HashMap;
 use z3;
 
-pub fn prove(input: Program) {
+pub fn prove(input: Program) -> bool {
     // Create context for each command and try to prove it individually?
     // All that we have to prove are assertions, all the rest just modifies context.
 
@@ -28,23 +28,20 @@ pub fn prove(input: Program) {
         //println!("{:?}", con);
 
         for frame in con {
-            let mut cfg = z3::Config::new();
-            cfg.set_model_generation(true);
-
-            let ctx = z3::Context::new(&cfg);
-            let t = z3::Solver::new(&ctx);
-            let needed = prove_frame(frame, &ctx, &t);
-            if needed {
-                let f = t.check();
-                println!("{:?}", f);
-                println!("{:?}", t.get_model());
-            } else {
-                println!("Nothing to prove!");
+            let sat = prove_frame(frame.clone());
+            match sat {
+                None => {}
+                Some(a) => {
+                    if a != z3::SatResult::Sat {
+                        println!("Failed to prove: {}", frame.command);
+                        return false;
+                    }
+                }
             }
-            println!();
         }
     }
 
+    true
     //println!("START");
     // Idea:
     // declare constants for all identifiers that are there (variables)
@@ -78,7 +75,30 @@ pub fn prove(input: Program) {
     //println!("DONE");
 }
 
-fn prove_frame(frame: context::Frame, ctx: &z3::Context, sol: &z3::Solver) -> bool {
+fn prove_frame(frame: context::Frame) -> Option<z3::SatResult> {
+    let mut cfg = z3::Config::new();
+    cfg.set_model_generation(true);
+
+    let ctx = z3::Context::new(&cfg);
+    let t = z3::Solver::new(&ctx);
+    let needed = _prove_frame(frame, &ctx, &t);
+    let result;
+    if needed {
+        let f = t.check();
+        println!();
+        println!("{:?}", f);
+        println!();
+        println!("{:?}", t.get_model());
+        result = Some(f);
+    } else {
+        println!("Nothing to prove!");
+        result = None;
+    }
+    println!();
+    result
+}
+
+fn _prove_frame(frame: context::Frame, ctx: &z3::Context, sol: &z3::Solver) -> bool {
     // convert to Z3 problem and run it
     // for all the variables that we have, define them and assert their value
     let mut vars_int = HashMap::new();

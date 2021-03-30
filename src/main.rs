@@ -88,6 +88,14 @@ fn validate(input: ast::Program) {
     }
 }
 
+fn prove(input: ast::Program) {
+    let proved = prover::prove(input);
+    if !proved {
+        println!("Failed to prove!");
+        std::process::exit(5);
+    }
+}
+
 fn main() {
     #[cfg(debug_assertions)]
     println!("Running a DEBUG version");
@@ -116,8 +124,7 @@ fn main() {
     }
 
     validate(simplified.clone());
-    prover::prove(simplified.clone());
-
+    prove(simplified.clone());
     println!();
     if verbosity >= 2 {
         for func in simplified.content.clone() {

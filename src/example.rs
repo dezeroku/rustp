@@ -9,5 +9,5 @@ fn main() {
 
     for i in 0..12 {}
     // %assert b == 15
-    //%assert true && true
+    //%assert true && false
 }

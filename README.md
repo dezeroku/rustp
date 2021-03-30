@@ -18,3 +18,4 @@ Validation checks:
 * 2 - parsing failed (parsing error)
 * 3 - parsing did not consume whole input (maybe just make it a warning?)
 * 4 - validation failed
+* 5 - failed to prove
