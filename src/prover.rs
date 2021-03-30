@@ -41,38 +41,41 @@ pub fn prove(input: Program) -> bool {
         }
     }
 
-    true
-    //println!("START");
+    println!("START");
     // Idea:
     // declare constants for all identifiers that are there (variables)
     // use asserts to assign values
     // assert the assertion in the end
     // try to check it
 
-    //let mut cfg = z3::Config::new();
-    //cfg.set_model_generation(true);
+    let mut cfg = z3::Config::new();
+    cfg.set_model_generation(true);
     //let te: i32 = 20;
-    //let ctx = z3::Context::new(&cfg);
+    let ctx = z3::Context::new(&cfg);
     //// TODO: use goal?
     ////let t = z3::Goal::new(&ctx, true, false, false);
     ////t.assert(&z3::ast::Ast());
-    //let t = z3::Solver::new(&ctx);
+    let t = z3::Solver::new(&ctx);
     //let b = z3::ast::Bool::new_const(&ctx, "b");
     //let c = z3::ast::Bool::new_const(&ctx, "c");
     //let d = z3::ast::Bool::new_const(&ctx, "d");
-    //let x = z3::ast::Int::new_const(&ctx, "x");
-    //let y = z3::ast::Int::new_const(&ctx, "y");
+    let x = z3::ast::Int::new_const(&ctx, "x");
+    let y = z3::ast::Int::new_const(&ctx, "y");
     //t.assert(&z3::ast::Bool::and(&ctx, &[&b, &c]));
     //t.assert(&z3::ast::Bool::and(&ctx, &[&c, &d]));
-    //t.assert(&x.gt(&y));
+    t.assert(&x.gt(&y));
+    let x = z3::ast::Int::new_const(&ctx, "x");
+    t.assert(&x.gt(&z3::ast::Int::from_i64(&ctx, 123)));
+    t.assert(&y.gt(&z3::ast::Int::from_i64(&ctx, 180)));
     //t.assert(&y.gt(&z3::ast::Int::from_i64(&ctx, te.into())));
     ////t.assert(&z3::ast::Bool::not(&z3::ast::Bool::and(&ctx, &[&c, &d])));
     ////t.assert(&z3::ast::Bool::from_bool(&ctx, c == d));
-    //let f = t.check();
-    //println!("{:?}", f);
-    //println!("{:?}", t.get_model());
+    let f = t.check();
+    println!("{:?}", f);
+    println!("{:?}", t.get_model());
     ////println!("{:?}", t.get_proof());
-    //println!("DONE");
+    println!("DONE");
+    true
 }
 
 fn prove_frame(frame: context::Frame) -> Option<z3::SatResult> {
@@ -105,6 +108,7 @@ fn _prove_frame(frame: context::Frame, ctx: &z3::Context, sol: &z3::Solver) -> b
     let vars = frame.vars.clone();
     for context::Var { n, t, v } in vars {
         let (name, var) = add_variable(n, t, v, &ctx);
+        // TODO: the add_variable should also handle setting the correct value based on input type
         // TODO: assign proper val
         // so we need to be able to convert value into z3 int/bool
         let val = 1;
@@ -135,6 +139,23 @@ fn add_variable(var: Variable, t: Type, v: Value, ctx: &z3::Context) -> (String,
     }
 }
 
+trait ProvableValue {
+    fn as_bool<'a>(self, ctx: &'a z3::Context) -> z3::ast::Bool<'a>;
+    fn as_int<'a>(self, ctx: &'a z3::Context) -> z3::ast::Int<'a>;
+}
+
+impl ProvableValue for Value {
+    fn as_bool<'a>(self, ctx: &'a z3::Context) -> z3::ast::Bool<'a> {
+        // TODO: implement
+        z3::ast::Bool::from_bool(ctx, false)
+    }
+
+    fn as_int<'a>(self, ctx: &'a z3::Context) -> z3::ast::Int<'a> {
+        // TODO: implement
+        z3::ast::Int::from_i64(ctx, -1)
+    }
+}
+
 trait ProvableBool {
     fn as_bool<'a>(self, ctx: &'a z3::Context) -> z3::ast::Bool<'a>;
 }
@@ -154,7 +175,7 @@ impl ProvableInt for Expr {
                 Opcode::Div => a.as_int(ctx).div(&b.as_int(ctx)),
                 Opcode::Rem => a.as_int(ctx).rem(&b.as_int(ctx)),
             },
-            Expr::Value(a) => unimplemented!(),
+            Expr::Value(a) => a.as_int(ctx),
         }
     }
 }
@@ -186,7 +207,7 @@ impl ProvableBool for Bool {
             Bool::LowerEqual(a, b) => a.as_int(ctx).le(&b.as_int(ctx)),
             Bool::GreaterThan(a, b) => a.as_int(ctx).gt(&b.as_int(ctx)),
             Bool::LowerThan(a, b) => a.as_int(ctx).lt(&b.as_int(ctx)),
-            Bool::Value(v) => unimplemented!(),
+            Bool::Value(v) => v.as_bool(ctx),
         }
     }
 }
