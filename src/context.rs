@@ -5,24 +5,24 @@ use itertools::Itertools;
 /// Keep everything needed to exactly reproduce the command without the whole program at hand
 #[derive(PartialEq, Clone, Debug, Hash, Eq)]
 pub struct Frame {
-    command: Command,
-    funcs: Vec<Function>,
-    vals: Vec<Val>,
-    vars: Vec<Var>,
+    pub command: Command,
+    pub funcs: Vec<Function>,
+    pub vals: Vec<Val>,
+    pub vars: Vec<Var>,
 }
 
 // Keeping track of the values may be helpful in the validator part
 #[derive(PartialEq, Clone, Debug, Hash, Eq)]
 pub struct Val {
-    v: Value,
-    t: Type,
+    pub v: Value,
+    pub t: Type,
 }
 
 #[derive(PartialEq, Clone, Debug, Hash, Eq)]
 pub struct Var {
-    n: Variable,
-    t: Type,
-    v: Value,
+    pub n: Variable,
+    pub t: Type,
+    pub v: Value,
 }
 
 pub fn get_context_func(func: Function, program: Program) -> Vec<Frame> {
