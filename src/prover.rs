@@ -32,7 +32,8 @@ pub fn prove(input: Program) -> bool {
             match sat {
                 None => {}
                 Some(a) => {
-                    if a != z3::SatResult::Sat {
+                    // A counter example was found - our check failed
+                    if a != z3::SatResult::Unsat {
                         println!("Failed to prove: {}", frame.command);
                         return false;
                     }
@@ -127,17 +128,24 @@ fn _prove_frame(frame: context::Frame, ctx: &z3::Context, sol: &z3::Solver) -> b
 }
 
 fn add_variable(var: Variable, t: Type, v: Value, ctx: &z3::Context, sol: &z3::Solver) {
+    let unknown = match v.clone() {
+        Value::Unknown => true,
+        _ => false,
+    };
     match t {
         Type::I32 => match var.clone() {
             Variable::Named(name) => {
-                //let t = z3::ast::Int::new_const(ctx, name);
-                sol.assert(
-                    &Bool::Equal(
-                        Expr::Value(Box::new(Value::Variable(var))),
-                        Expr::Value(Box::new(v)),
-                    )
-                    .as_bool(ctx),
-                );
+                if unknown {
+                    z3::ast::Int::new_const(ctx, name);
+                } else {
+                    sol.assert(
+                        &Bool::Equal(
+                            Expr::Value(Box::new(Value::Variable(var))),
+                            Expr::Value(Box::new(v)),
+                        )
+                        .as_bool(ctx),
+                    );
+                }
             }
             _ => unimplemented!(),
         },
@@ -189,7 +197,14 @@ impl ProvableValue for Value {
             Value::ReferenceMutable(v) => unimplemented!(),
             Value::Dereference(v) => unimplemented!(),
             Value::Unit => unimplemented!(),
-            Value::Unknown => unimplemented!(),
+            Value::Unknown => {
+                // TODO: what this should be set to?
+                // TODO: use the for_all quantifier properly, to test for all possible inputs, instead of trying to find the one that works?
+                // It's mostly used for the function input params
+                //let mut rng = rand::thread_rng();
+                //z3::ast::Int::new_const(ctx, rng.gen::<i32>().to_string())
+                z3::ast::Int::new_const(ctx, "_")
+            }
         }
     }
 }
@@ -255,12 +270,15 @@ trait ProvableCommand {
 }
 
 impl ProvableCommand for Command {
+    // Concept: Try to prove not (negate everything) to try to find if there exists an incorrect mapping?
     fn as_bool<'a>(self, ctx: &'a z3::Context) -> (bool, z3::ast::Bool<'a>) {
         match self {
             Command::ProveControl(a) => match a {
-                ProveControl::Assert(b) => (true, b.as_bool(ctx)),
-                ProveControl::Assume(b) => (true, b.as_bool(ctx)),
-                ProveControl::LoopInvariant(b) => (true, b.as_bool(ctx)),
+                // We are trying to find COUNTER example here.
+                // So if we get sat, then it means that the assertion is actually incorrect
+                ProveControl::Assert(b) => (true, b.as_bool(ctx).not()),
+                ProveControl::Assume(b) => (true, b.as_bool(ctx).not()),
+                ProveControl::LoopInvariant(b) => (true, b.as_bool(ctx).not()),
             },
             _ => {
                 // Nothing to prove here
@@ -284,7 +302,7 @@ mod test {
             vars: Vec::new(),
         };
 
-        assert_eq!(prove_frame(frame), Some(z3::SatResult::Sat));
+        assert_eq!(prove_frame(frame), Some(z3::SatResult::Unsat));
     }
 
     #[test]
@@ -297,7 +315,7 @@ mod test {
             vars: Vec::new(),
         };
 
-        assert_eq!(prove_frame(frame), Some(z3::SatResult::Unsat));
+        assert_eq!(prove_frame(frame), Some(z3::SatResult::Sat));
     }
 
     #[test]
@@ -313,7 +331,7 @@ mod test {
             vars: Vec::new(),
         };
 
-        assert_eq!(prove_frame(frame), Some(z3::SatResult::Sat));
+        assert_eq!(prove_frame(frame), Some(z3::SatResult::Unsat));
     }
 
     #[test]
@@ -329,7 +347,7 @@ mod test {
             vars: Vec::new(),
         };
 
-        assert_eq!(prove_frame(frame), Some(z3::SatResult::Unsat));
+        assert_eq!(prove_frame(frame), Some(z3::SatResult::Sat));
     }
 
     #[test]
@@ -345,6 +363,6 @@ mod test {
             vars: Vec::new(),
         };
 
-        assert_eq!(prove_frame(frame), Some(z3::SatResult::Sat));
+        assert_eq!(prove_frame(frame), Some(z3::SatResult::Unsat));
     }
 }

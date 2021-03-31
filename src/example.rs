@@ -13,3 +13,8 @@ fn main() {
     //%assert b == a + 3
     // %assert 15 > 13 && 7 == 7
 }
+
+fn c(a: i32, xdd: i32) {
+    let x: i32 = 3;
+    //%assert x == 3
+}

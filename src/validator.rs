@@ -8,14 +8,24 @@ pub fn validate(input: Program) -> bool {
 
 /// Check for using undefined variables in ProveCommands
 fn no_undefined(input: Program) -> bool {
-    let definitions = Vec::new();
-
     let mut functions = Vec::new();
     for func in input.content.clone() {
         functions.push(func.name);
     }
 
     for func in input.content {
+        let mut definitions = Vec::new();
+        // Add function params as recognized names
+        for i in func.clone().input {
+            match i {
+                Binding::Declaration(name, _, _) => {
+                    def_push(&mut definitions, name);
+                }
+                _ => panic!("Unsupported function parameter provided: {}", i),
+            }
+            //
+        }
+
         if !no_undefined_func(func, definitions.clone(), functions.clone()) {
             return false;
         }
