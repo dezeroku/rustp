@@ -6,6 +6,7 @@ mod simplifier;
 mod validator;
 
 use clap::{App, Arg};
+use nom::Err;
 use std::fs;
 use std::process::{Command, Stdio};
 
@@ -41,9 +42,22 @@ fn parse(filename: &str) -> ast::Program {
                 std::process::exit(3);
             }
         }
-        Err(a) => {
-            println!("Couldn't parse!");
-            println!("{}", a);
+        Err(nom::Err::Error(a)) => {
+            println!("Failed to parse!");
+            println!("Tag: {:?}", a.code);
+            println!("Unmatched input:\n {}", a.input);
+            std::process::exit(2);
+        }
+        Err(nom::Err::Failure(a)) => {
+            println!("Failed to parse!");
+            println!("Tag: {:?}", a.code);
+            println!("Unmatched input:\n {}", a.input);
+            std::process::exit(2);
+        }
+        Err(nom::Err::Incomplete(_)) => {
+            // This case shouldn't happen at all, we're working with files, so the whole context is known
+            println!("Failed to parse!");
+            println!("Not enough data!");
             std::process::exit(2);
         }
     }
