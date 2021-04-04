@@ -1,5 +1,6 @@
 use crate::ast::*;
 use itertools::Itertools;
+use log;
 
 /// Describe the state, as we enter the command (state BEFORE it's run)
 /// Keep everything needed to exactly reproduce the command without the whole program at hand
@@ -180,102 +181,137 @@ fn get_vals_bool(b: Bool) -> Vec<Val> {
 }
 
 fn _get_vals_bool(z: Bool, mut decs: &mut Vec<Val>) {
+    log::debug!("Bool: {}", z);
     match z {
         Bool::And(a, b) => {
+            log::debug!("Bool: And {} {}", a, b);
             _get_vals_bool(*a, &mut decs);
             _get_vals_bool(*b, &mut decs);
         }
         Bool::Or(a, b) => {
+            log::debug!("Bool: Or {} {}", a, b);
             _get_vals_bool(*a, &mut decs);
             _get_vals_bool(*b, &mut decs);
         }
         Bool::Not(a) => {
+            log::debug!("Bool: Not {}", a);
             _get_vals_bool(*a, &mut decs);
         }
         Bool::Value(a) => {
+            log::debug!("Bool: Val {}", a);
             _get_vals_val(*a, &mut decs, Type::Bool);
         }
         Bool::Equal(a, b) => {
+            log::debug!("Bool: Equal {} {}", a, b);
             _get_vals_expr(a, &mut decs);
             _get_vals_expr(b, &mut decs);
         }
         Bool::GreaterEqual(a, b) => {
+            log::debug!("Bool: GreaterEqual {} {}", a, b);
             _get_vals_expr(a, &mut decs);
             _get_vals_expr(b, &mut decs);
         }
         Bool::LowerEqual(a, b) => {
+            log::debug!("Bool: LowerEqual {} {}", a, b);
             _get_vals_expr(a, &mut decs);
             _get_vals_expr(b, &mut decs);
         }
         Bool::GreaterThan(a, b) => {
+            log::debug!("Bool: GreaterThan {} {}", a, b);
             _get_vals_expr(a, &mut decs);
             _get_vals_expr(b, &mut decs);
         }
         Bool::LowerThan(a, b) => {
+            log::debug!("Bool: LowerThan {} {}", a, b);
             _get_vals_expr(a, &mut decs);
             _get_vals_expr(b, &mut decs);
         }
-        Bool::True => {}
-        Bool::False => {}
+        Bool::True => {
+            log::debug!("Bool: True");
+        }
+        Bool::False => {
+            log::debug!("Bool: False");
+        }
     }
 }
 
 fn _get_vals_val(z: Value, mut decs: &mut Vec<Val>, t: Type) {
+    log::debug!("Val: {} {}", z, t);
     match z.clone() {
         Value::Expr(a) => {
+            log::debug!("Val: Expr: {} {}", z, t);
             decs.push(Val { v: z.clone(), t: t });
             _get_vals_expr(a, &mut decs);
         }
         Value::Bool(a) => {
+            log::debug!("Val: Bool: {} {}", z, t);
             decs.push(Val { v: z.clone(), t: t });
             _get_vals_bool(a, &mut decs);
         }
         Value::Variable(v) => {
+            log::debug!("Val: Var: {} {}", z, t);
             decs.push(Val { v: z.clone(), t: t });
         }
         Value::Tuple(a) => {
+            log::debug!("Val: Tuple: {} {}", z, t);
             decs.push(Val { v: z.clone(), t: t });
             for i in a {
                 _get_vals_val(i, &mut decs, Type::Unknown);
             }
         }
         Value::Array(a) => {
+            log::debug!("Val: Array: {} {}", z, t);
             decs.push(Val { v: z.clone(), t: t });
             for i in a {
                 _get_vals_val(i, &mut decs, Type::Unknown);
             }
         }
         Value::FunctionCall(name, a) => {
+            log::debug!("Val: FunctionCall: {} {}", z, t);
             decs.push(Val { v: z.clone(), t: t });
             for i in a {
                 _get_vals_val(i, &mut decs, Type::Unknown);
             }
         }
         Value::Dereference(a) => {
+            log::debug!("Val: Dereference: {} {}", z, t);
             decs.push(Val { v: z.clone(), t: t });
             _get_vals_val(*a, &mut decs, Type::Unknown);
         }
         Value::Reference(a) => {
+            log::debug!("Val: Reference: {} {}", z, t);
             decs.push(Val { v: z.clone(), t: t });
             _get_vals_val(*a, &mut decs, Type::Unknown);
         }
         Value::ReferenceMutable(a) => {
+            log::debug!("Val: ReferenceMutable: {} {}", z, t);
             decs.push(Val { v: z.clone(), t: t });
             _get_vals_val(*a, &mut decs, Type::Unknown);
         }
-        Value::Unit => {}
-        Value::Unknown => {}
+        Value::Unit => {
+            log::debug!("Val: Unit");
+        }
+        Value::Unknown => {
+            log::debug!("Val: Unknown");
+        }
     }
 }
 
 fn _get_vals_expr(z: Expr, mut decs: &mut Vec<Val>) {
+    log::debug!("Expr: {}", z);
     match z {
-        Expr::Number(_) => {}
+        Expr::Number(_) => {
+            log::debug!("Expr: Number");
+        }
         Expr::Op(a, _, b) => {
+            log::debug!("Expr: Op {} {}", a, b);
             _get_vals_expr(*a, &mut decs);
             _get_vals_expr(*b, &mut decs);
         }
-        Expr::Value(a) => _get_vals_val(*a, &mut decs, Type::I32),
+        Expr::Value(a) => {
+            log::debug!("Expr: Val {}", a);
+            _get_vals_val(*a, &mut decs, Type::I32);
+        }
     }
 }
 
