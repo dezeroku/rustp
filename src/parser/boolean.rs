@@ -417,4 +417,31 @@ mod test {
         assert!(not("!").unwrap().0 == "");
         assert!(not("?").is_err());
     }
+
+    #[test]
+    fn equal1() {
+        assert_eq!(
+            factor_compare_equal("quo * y + rem == x").unwrap().1,
+            Box::new(ast::Bool::Equal(
+                ast::Expr::Op(
+                    Box::new(ast::Expr::Op(
+                        Box::new(ast::Expr::Value(Box::new(ast::Value::Variable(
+                            ast::Variable::Named(String::from("quo"))
+                        )))),
+                        ast::Opcode::Mul,
+                        Box::new(ast::Expr::Value(Box::new(ast::Value::Variable(
+                            ast::Variable::Named(String::from("y"))
+                        ))))
+                    )),
+                    ast::Opcode::Add,
+                    Box::new(ast::Expr::Value(Box::new(ast::Value::Variable(
+                        ast::Variable::Named(String::from("rem"))
+                    ))))
+                ),
+                ast::Expr::Value(Box::new(ast::Value::Variable(ast::Variable::Named(
+                    String::from("x")
+                ))))
+            ))
+        );
+    }
 }
