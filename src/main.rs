@@ -77,7 +77,12 @@ fn setup_logging(level: i32) {
         5 => log::LevelFilter::Trace,
         _ => log::LevelFilter::max(),
     };
-    Builder::new().filter_level(s).init();
+    let mut b = Builder::new();
+    b.filter_level(s);
+    if level < 5 {
+        b.filter(Some("z3"), log::LevelFilter::Info);
+    }
+    b.init();
     log::info!("Debug level: {}", s);
 }
 
