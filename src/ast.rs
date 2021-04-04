@@ -1,6 +1,7 @@
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct Program {
     pub content: Vec<Function>,
 }
@@ -16,7 +17,7 @@ impl fmt::Display for Program {
     }
 }
 
-#[derive(PartialEq, Clone, Debug, Eq, Hash)]
+#[derive(PartialEq, Clone, Debug, Eq, Hash, Serialize, Deserialize)]
 pub enum Bool {
     And(Box<Bool>, Box<Bool>),
     Or(Box<Bool>, Box<Bool>),
@@ -49,7 +50,7 @@ impl fmt::Display for Bool {
     }
 }
 
-#[derive(PartialEq, Clone, Debug, Hash, Eq)]
+#[derive(PartialEq, Clone, Debug, Hash, Eq, Serialize, Deserialize)]
 pub enum ProveControl {
     Assert(Bool),
     Assume(Bool),
@@ -68,7 +69,7 @@ impl fmt::Display for ProveControl {
     }
 }
 
-#[derive(PartialEq, Clone, Debug, Hash, Eq)]
+#[derive(PartialEq, Clone, Debug, Hash, Eq, Serialize, Deserialize)]
 pub enum Type {
     Bool,
     I32,
@@ -98,7 +99,7 @@ impl fmt::Display for Type {
     }
 }
 
-#[derive(PartialEq, Clone, Debug, Eq, Hash)]
+#[derive(PartialEq, Clone, Debug, Eq, Hash, Serialize, Deserialize)]
 pub enum Value {
     Expr(Expr),
     Bool(Bool),
@@ -135,7 +136,7 @@ impl fmt::Display for Value {
     }
 }
 
-#[derive(PartialEq, Clone, Debug, Hash, Eq)]
+#[derive(PartialEq, Clone, Debug, Hash, Eq, Serialize, Deserialize)]
 pub enum Command {
     Binding(Binding),
     Assignment(Assignment),
@@ -156,7 +157,7 @@ impl fmt::Display for Command {
     }
 }
 
-#[derive(PartialEq, Clone, Debug, Hash, Eq)]
+#[derive(PartialEq, Clone, Debug, Hash, Eq, Serialize, Deserialize)]
 pub enum Assignment {
     Tuple(Vec<Assignment>),
     /// Variable has to be already defined via binding to be assigned
@@ -172,7 +173,7 @@ impl fmt::Display for Assignment {
     }
 }
 
-#[derive(PartialEq, Clone, Debug, Hash, Eq)]
+#[derive(PartialEq, Clone, Debug, Hash, Eq, Serialize, Deserialize)]
 pub enum Binding {
     /// name, type, is_mutable
     Declaration(Variable, Type, bool),
@@ -193,7 +194,7 @@ impl fmt::Display for Binding {
     }
 }
 
-#[derive(PartialEq, Clone, Debug, Eq, Hash)]
+#[derive(PartialEq, Clone, Debug, Eq, Hash, Serialize, Deserialize)]
 pub enum Variable {
     Named(String),
     /// Just a _ equivalent
@@ -215,7 +216,7 @@ impl fmt::Display for Variable {
     }
 }
 
-#[derive(PartialEq, Clone, Debug, Eq, Hash)]
+#[derive(PartialEq, Clone, Debug, Eq, Hash, Serialize, Deserialize)]
 pub enum Expr {
     Number(i32),
     Value(Box<Value>),
@@ -232,7 +233,7 @@ impl fmt::Display for Expr {
     }
 }
 
-#[derive(PartialEq, Clone, Debug, Eq, Hash)]
+#[derive(PartialEq, Clone, Debug, Eq, Hash, Serialize, Deserialize)]
 pub enum Opcode {
     Mul,
     Div,
@@ -254,7 +255,7 @@ impl fmt::Display for Opcode {
     }
 }
 
-#[derive(PartialEq, Clone, Debug, Hash, Eq)]
+#[derive(PartialEq, Clone, Debug, Hash, Eq, Serialize, Deserialize)]
 pub enum Block {
     /// vector of conditions for if/elif, vector of vectors of commands for if/elif, vector of commands for else
     If(Vec<Bool>, Vec<Vec<Command>>, Vec<Command>),
@@ -295,7 +296,7 @@ impl fmt::Display for Block {
     }
 }
 
-#[derive(PartialEq, Clone, Debug, Hash, Eq)]
+#[derive(PartialEq, Clone, Debug, Hash, Eq, Serialize, Deserialize)]
 pub struct Function {
     pub name: String,
     pub content: Vec<Command>,
