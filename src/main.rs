@@ -7,11 +7,9 @@ mod validator;
 
 use clap::{App, Arg};
 use env_logger::Builder;
-use nom::Err;
 use std::fs;
 use std::process::{Command, Stdio};
 
-#[macro_use]
 extern crate log;
 
 fn rustc_check(filename: &str) {

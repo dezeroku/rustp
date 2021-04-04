@@ -88,6 +88,7 @@ fn postcondition(input: &str) -> IResult<&str, ast::Bool> {
 
 fn function(input: &str) -> IResult<&str, ast::Function> {
     tuple((
+        //many0(tuple((multispace0, comments, multispace0))),
         opt(precondition),
         multispace0,
         opt(postcondition),
@@ -111,6 +112,7 @@ fn function(input: &str) -> IResult<&str, ast::Function> {
     ))(input)
     .and_then(|(next_input, res)| {
         let (
+            //   _,
             pre,
             _,
             post,
@@ -900,6 +902,7 @@ fn binding_assignment_tuple_multiple(input: &str) -> IResult<&str, ast::Command>
 }
 
 fn binding_assignment(input: &str) -> IResult<&str, ast::Command> {
+    // TODO: IMPORTANT: reference and reference mutable are not real types, handle these properly somehow
     tuple((
         space0,
         tag("let"),
@@ -907,20 +910,39 @@ fn binding_assignment(input: &str) -> IResult<&str, ast::Command> {
         opt(tuple((tag("mut"), space1))),
         variable,
         space0,
-        tuple((char(':'), space0, type_def, space0)),
         alt((
-            tuple((char('='), space0, array_content, space0, char(';'))),
-            tuple((char('='), space0, tuple_values, space0, char(';'))),
-            tuple((char('='), space0, boolean::expr_val, space0, char(';'))),
-            tuple((char('='), space0, math::expr_val, space0, char(';'))),
-            tuple((char('='), space0, reference, space0, char(';'))),
-            tuple((char('='), space0, reference_mut, space0, char(';'))),
-            tuple((char('='), space0, dereference, space0, char(';'))),
+            tuple((
+                tuple((char(':'), space0, array_type, space0)),
+                tuple((char('='), space0, array_content, space0, char(';'))),
+            )),
+            tuple((
+                tuple((char(':'), space0, tuple_type, space0)),
+                tuple((char('='), space0, tuple_values, space0, char(';'))),
+            )),
+            tuple((
+                tuple((char(':'), space0, type_def_bool, space0)),
+                tuple((char('='), space0, boolean::expr_val, space0, char(';'))),
+            )),
+            tuple((
+                tuple((char(':'), space0, type_def_i32, space0)),
+                tuple((char('='), space0, math::expr_val, space0, char(';'))),
+            )),
+            //tuple((
+            //    tuple((char(':'), space0, type_def_reference, space0)),
+            //    tuple((char('='), space0, reference, space0, char(';'))),
+            //)),
+            //tuple((
+            //    tuple((char(':'), space0, type_def_reference_mut, space0)),
+            //    tuple((char('='), space0, reference_mut, space0, char(';'))),
+            //)),
+            //tuple((
+            //    tuple((char(':'), space0, type_def_single, space0)),
+            //    tuple((char('='), space0, dereference, space0, char(';'))),
+            //)),
         )),
     ))(input)
     .and_then(|(next_input, x)| {
-        let (_, _, _, m, v, _, (_, _, t, _), tu) = x;
-        let (_, _, exp, _, _) = tu;
+        let (_, _, _, m, v, _, ((_, _, t, _), (_, _, exp, _, _))) = x;
         let mu = match m {
             Some(_) => true,
             None => false,
@@ -1178,18 +1200,18 @@ fn array_type(input: &str) -> IResult<&str, ast::Type> {
     })
 }
 
-fn type_def_pointer(input: &str) -> IResult<&str, bool> {
+fn type_def_reference(input: &str) -> IResult<&str, bool> {
     tag("&")(input).and_then(|(next_input, _)| Ok((next_input, false)))
 }
 
-fn type_def_pointer_mut(input: &str) -> IResult<&str, bool> {
+fn type_def_reference_mut(input: &str) -> IResult<&str, bool> {
     tag("&mut")(input).and_then(|(next_input, _)| Ok((next_input, true)))
 }
 
 fn type_def(input: &str) -> IResult<&str, ast::Type> {
     tuple((
         opt(tuple((
-            alt((type_def_pointer_mut, type_def_pointer)),
+            alt((type_def_reference_mut, type_def_reference)),
             space0,
         ))),
         alt((array_type, tuple_type, type_def_single)),
@@ -1814,41 +1836,33 @@ mod test {
         assert!(binding_assignment("let y: i32 = 12 - 5 * 6;").unwrap().0 == "");
         assert!(binding_assignment("let z = 3").is_err());
         assert!(binding_assignment("let z = 3;").is_err());
-        assert!(
-            binding_assignment("let mut z: i32 = 3;").unwrap().1
-                == ast::Command::Binding(ast::Binding::Assignment(
-                    ast::Variable::Named("z".to_string()),
-                    ast::Type::I32,
-                    ast::Value::Expr(ast::Expr::Number(3)),
-                    true
-                ))
+        assert_eq!(
+            binding_assignment("let mut z: i32 = 3;").unwrap().1,
+            ast::Command::Binding(ast::Binding::Assignment(
+                ast::Variable::Named("z".to_string()),
+                ast::Type::I32,
+                ast::Value::Expr(ast::Expr::Number(3)),
+                true
+            ))
         );
         // This one will be validated later on?
         // Or can we just assume that the code we are getting is correct Rust?
-        assert!(
-            binding_assignment("let z: bool = 3;").unwrap().1
-                == ast::Command::Binding(ast::Binding::Assignment(
-                    ast::Variable::Named("z".to_string()),
-                    ast::Type::Bool,
-                    ast::Value::Expr(ast::Expr::Number(3)),
-                    false
-                ))
+        assert!(binding_assignment("let z: bool = 3;").is_err());
+        assert_eq!(
+            binding_assignment("let z: bool = true;").unwrap().1,
+            ast::Command::Binding(ast::Binding::Assignment(
+                ast::Variable::Named("z".to_string()),
+                ast::Type::Bool,
+                ast::Value::Bool(ast::Bool::True),
+                false
+            ))
         );
-        assert!(
-            binding_assignment("let z: bool = true;").unwrap().1
-                == ast::Command::Binding(ast::Binding::Assignment(
-                    ast::Variable::Named("z".to_string()),
-                    ast::Type::Bool,
-                    ast::Value::Bool(ast::Bool::True),
-                    false
-                ))
-        );
-        assert!(binding_assignment("let c: i32 = a + 43;").unwrap().0 == "");
-        assert!(
+        assert_eq!(binding_assignment("let c: i32 = a + 43;").unwrap().0, "");
+        assert_eq!(
             binding_assignment("let c: (i32, bool) = (12, false);")
                 .unwrap()
-                .0
-                == ""
+                .0,
+            ""
         );
     }
 
