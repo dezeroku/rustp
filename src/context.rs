@@ -10,6 +10,8 @@ pub struct Frame {
     pub funcs: Vec<Function>,
     pub vals: Vec<Val>,
     pub vars: Vec<Var>,
+    /// assumes are meant to store content of previous assumes e.g preconditions.
+    pub assumes: Vec<Bool>,
 }
 
 // Keeping track of the values may be helpful in the validator part
@@ -62,6 +64,7 @@ pub fn get_context_func(func: Function, program: Program) -> Vec<Frame> {
         funcs: funcs,
         vals: Vec::new(),
         vars: vars,
+        assumes: Vec::new(),
     };
 
     for command in func.content {
@@ -86,6 +89,7 @@ pub fn get_context_command(command: Command, frame: &Frame) -> Frame {
     let funcs = frame.funcs.clone();
     let mut vals = frame.vals.clone();
     let mut vars = frame.vars.clone();
+    let mut assumes = frame.assumes.clone();
 
     let mut vals_temp = Vec::new();
 
@@ -96,6 +100,7 @@ pub fn get_context_command(command: Command, frame: &Frame) -> Frame {
             _get_vals_bool(a, &mut vals_temp);
         }
         Command::ProveControl(ProveControl::Assume(a)) => {
+            assumes.push(a.clone());
             _get_vals_bool(a, &mut vals_temp);
         }
 
@@ -166,6 +171,7 @@ pub fn get_context_command(command: Command, frame: &Frame) -> Frame {
         funcs: funcs,
         vals: vals,
         vars: vars,
+        assumes: assumes,
     };
 
     result

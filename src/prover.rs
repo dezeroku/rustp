@@ -1,5 +1,6 @@
 use crate::ast::*;
 use crate::context;
+use log;
 use std::collections::HashMap;
 use z3;
 
@@ -9,25 +10,42 @@ pub fn prove(input: Program) -> bool {
 
     // For now just display everything here when it happens.
     for func in input.content.clone() {
-        let mut temp = func.content.clone();
-        if func.output.clone() != Type::Unit {
-            temp.push(Command::Binding(Binding::Assignment(
-                Variable::Named(String::from("return_value")),
-                func.output.clone(),
-                func.return_value.clone(),
-                false,
-            )));
-        }
+        let f_name = func.name.clone();
+        log::info!("Proving function: {}", f_name);
 
+        let mut to_prove = func.clone();
+
+        let mut temp = func.content.clone();
+
+        // Set precondition as first assume
+        temp.insert(
+            0,
+            Command::ProveControl(ProveControl::Assume(func.precondition)),
+        );
+
+        // TODO: uncomment when tuple type is handled in add_variable
+        //if func.output.clone() != Type::Unit {
+        //    temp.push(Command::Binding(Binding::Assignment(
+        //        Variable::Named(String::from("return_value")),
+        //        func.output.clone(),
+        //        func.return_value.clone(),
+        //        false,
+        //    )));
+        //}
+
+        // Set postcondition as last assert
         temp.push(Command::ProveControl(ProveControl::Assert(
             func.postcondition.clone(),
         )));
 
-        let con = context::get_context_func(func, input.clone());
+        to_prove.content = temp;
+
+        let con = context::get_context_func(to_prove, input.clone());
         // Try to prove
         //println!("{:?}", con);
 
         for frame in con {
+            log::debug!("{:?}", frame);
             let sat = prove_frame(frame.clone());
             match sat {
                 None => {}
@@ -40,6 +58,8 @@ pub fn prove(input: Program) -> bool {
                 }
             }
         }
+
+        log::info!("Successfully proved function: {}", f_name);
     }
 
     //println!("START");
@@ -85,20 +105,18 @@ fn prove_frame(frame: context::Frame) -> Option<z3::SatResult> {
 
     let ctx = z3::Context::new(&cfg);
     let t = z3::Solver::new(&ctx);
-    let needed = _prove_frame(frame, &ctx, &t);
+    let needed = _prove_frame(frame.clone(), &ctx, &t);
     let result;
     if needed {
         let f = t.check();
-        println!();
-        println!("{:?}", f);
-        println!();
-        println!("{:?}", t.get_model());
+        log::debug!("{}", frame.command);
+        log::debug!("{:?}", f);
+        log::debug!("{:?}", t.get_model());
         result = Some(f);
     } else {
-        println!("Nothing to prove!");
+        //println!("Nothing to prove!");
         result = None;
     }
-    println!();
     result
 }
 
@@ -108,7 +126,7 @@ fn _prove_frame(frame: context::Frame, ctx: &z3::Context, sol: &z3::Solver) -> b
     //let mut vars_int = HashMap::new();
     let vars = frame.vars.clone();
     for context::Var { n, t, v } in vars {
-        add_variable(n, t, v, &ctx, sol);
+        add_variable(n, t, v, ctx, sol);
         // TODO: the add_variable should also handle setting the correct value based on input type
         // TODO: assign proper val
         // so we need to be able to convert value into z3 int/bool
@@ -118,11 +136,15 @@ fn _prove_frame(frame: context::Frame, ctx: &z3::Context, sol: &z3::Solver) -> b
         //vars_int.insert(name, var);
     }
 
+    for assume in frame.assumes {
+        log::debug!("Assume: {}", assume);
+        sol.assert(&assume.as_bool(ctx));
+    }
+
     // TODO: run the assertion to provea
     // so we need to be able to convert bool into z3 bool
     let to_prove = frame.command;
-    println!("{}", to_prove.clone());
-    let (needed, to_prove_z3) = to_prove.as_bool(&ctx);
+    let (needed, to_prove_z3) = to_prove.as_bool(ctx);
     sol.assert(&to_prove_z3);
     needed
 }
@@ -149,6 +171,24 @@ fn add_variable(var: Variable, t: Type, v: Value, ctx: &z3::Context, sol: &z3::S
             }
             _ => unimplemented!(),
         },
+        Type::Bool => match var.clone() {
+            // Use smart boolean operations to assign the newly created z3 variable same value that's assigned in the code
+            Variable::Named(name) => {
+                if unknown {
+                    z3::ast::Bool::new_const(ctx, name);
+                } else {
+                    sol.assert(&z3::ast::Bool::or(
+                        ctx,
+                        &[&z3::ast::Bool::and(
+                            ctx,
+                            &[&z3::ast::Bool::new_const(ctx, name), &v.as_bool(ctx)],
+                        )],
+                    ));
+                }
+            }
+            _ => unimplemented!(),
+        },
+
         _ => unimplemented!(),
     }
 }
@@ -183,7 +223,7 @@ impl ProvableValue for Value {
     fn as_int<'a>(self, ctx: &'a z3::Context) -> z3::ast::Int<'a> {
         match self {
             Value::Expr(e) => e.as_int(ctx),
-            Value::Bool(b) => panic!("Bool value used as an int"),
+            Value::Bool(b) => panic!("Bool value ({}) used as an int", b),
             Value::Variable(x) => match x {
                 Variable::Named(name) => z3::ast::Int::new_const(ctx, name),
                 Variable::Empty => unimplemented!(),
@@ -277,7 +317,12 @@ impl ProvableCommand for Command {
                 // We are trying to find COUNTER example here.
                 // So if we get sat, then it means that the assertion is actually incorrect
                 ProveControl::Assert(b) => (true, b.as_bool(ctx).not()),
-                ProveControl::Assume(b) => (true, b.as_bool(ctx).not()),
+                ProveControl::Assume(b) => {
+                    // No need to prove these, we believe them without testing
+                    // Just pas the information from that further on
+                    //true, b.as_bool(ctx).not())
+                    (false, z3::ast::Bool::from_bool(&ctx, true))
+                }
                 ProveControl::LoopInvariant(b) => (true, b.as_bool(ctx).not()),
             },
             _ => {
@@ -300,6 +345,7 @@ mod test {
             funcs: Vec::new(),
             vals: Vec::new(),
             vars: Vec::new(),
+            assumes: Vec::new(),
         };
 
         assert_eq!(prove_frame(frame), Some(z3::SatResult::Unsat));
@@ -313,6 +359,7 @@ mod test {
             funcs: Vec::new(),
             vals: Vec::new(),
             vars: Vec::new(),
+            assumes: Vec::new(),
         };
 
         assert_eq!(prove_frame(frame), Some(z3::SatResult::Sat));
@@ -329,6 +376,7 @@ mod test {
             funcs: Vec::new(),
             vals: Vec::new(),
             vars: Vec::new(),
+            assumes: Vec::new(),
         };
 
         assert_eq!(prove_frame(frame), Some(z3::SatResult::Unsat));
@@ -345,6 +393,7 @@ mod test {
             funcs: Vec::new(),
             vals: Vec::new(),
             vars: Vec::new(),
+            assumes: Vec::new(),
         };
 
         assert_eq!(prove_frame(frame), Some(z3::SatResult::Sat));
@@ -361,6 +410,7 @@ mod test {
             funcs: Vec::new(),
             vals: Vec::new(),
             vars: Vec::new(),
+            assumes: Vec::new(),
         };
 
         assert_eq!(prove_frame(frame), Some(z3::SatResult::Unsat));
