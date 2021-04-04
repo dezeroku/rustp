@@ -6,9 +6,13 @@ mod simplifier;
 mod validator;
 
 use clap::{App, Arg};
+use env_logger::Builder;
 use nom::Err;
 use std::fs;
 use std::process::{Command, Stdio};
+
+#[macro_use]
+extern crate log;
 
 fn rustc_check(filename: &str) {
     // Is handling Windows required?
@@ -63,6 +67,20 @@ fn parse(filename: &str) -> ast::Program {
     }
 }
 
+fn setup_logging(level: i32) {
+    let s = match level {
+        0 => log::LevelFilter::Off,
+        1 => log::LevelFilter::Error,
+        2 => log::LevelFilter::Warn,
+        3 => log::LevelFilter::Info,
+        4 => log::LevelFilter::Debug,
+        5 => log::LevelFilter::Trace,
+        _ => log::LevelFilter::max(),
+    };
+    Builder::new().filter_level(s).init();
+    log::info!("Debug level: {}", s);
+}
+
 fn args() -> (String, i32) {
     let matches = App::new("rustp")
         .version("1.0")
@@ -88,7 +106,11 @@ fn args() -> (String, i32) {
     let verbosity = match matches.occurrences_of("v") {
         0 => 0,
         1 => 1,
-        2 | _ => 2,
+        2 => 2,
+        3 => 3,
+        4 => 4,
+        5 => 5,
+        6 | _ => 6,
     };
 
     (filename, verbosity)
@@ -117,9 +139,9 @@ fn main() {
     let (_filename, verbosity) = args();
     let filename = &_filename.as_str();
 
-    if verbosity >= 1 {
-        println!("In file {}:", filename);
-    }
+    setup_logging(verbosity);
+
+    log::info!("Checking file: {}", filename);
 
     rustc_check(filename);
 
@@ -130,23 +152,23 @@ fn main() {
     // We assume that at the stage of proving, all the types are already solved.
     // If that's not the case, something is wrong in our inferring
     // TODO: add a check for this
-    if verbosity >= 2 {
-        println!();
-        println!("Before: |{}|", f);
-        println!();
-        println!("After: |{}|", simplified);
-    }
+    //if verbosity >= 2 {
+    //    println!();
+    //    println!("Before: |{}|", f);
+    //    println!();
+    //    println!("After: |{}|", simplified);
+    //}
 
     validate(simplified.clone());
     prove(simplified.clone());
     println!();
-    if verbosity >= 2 {
-        for func in simplified.content.clone() {
-            for i in context::get_context_func(func, simplified.clone()) {
-                println!("{:?}", i);
-                println!();
-            }
-        }
-    }
+    //if verbosity >= 2 {
+    //    for func in simplified.content.clone() {
+    //        for i in context::get_context_func(func, simplified.clone()) {
+    //            println!("{:?}", i);
+    //            println!();
+    //        }
+    //    }
+    //}
     //fs::write("./example.z3", val).expect("Unable to write file");
 }
