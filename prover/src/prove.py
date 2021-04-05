@@ -1,19 +1,21 @@
 import json
 import logging
-import rast
 
-#import ast
 from z3 import Int, Solver, IntSort, IntVector, Array, sat
 from z3 import *
+
+import rast
+import parser
 
 # Read the json data
 def parse_json(filename):
     with open(filename, 'r') as data:
         a = json.loads(data.read())
-    return a
+    code = parser.parse_ast(a)
+    return code
 
 def main():
-    a = parse_json("example.json")
+    code = parse_json("example.json")
     #print(a)
     #root = ast.Program(a["content"])
     #a = a["content"]
