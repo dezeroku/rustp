@@ -1,59 +1,119 @@
 import typing
 
-class Program:
-    def __init__(self, content):
+class Base:
+    pass
+
+class Bool(Base):
+    pass
+
+class Expr(Base):
+    pass
+
+class Variable(Base):
+    pass
+
+class Type(Base):
+    pass
+
+class Opcode(Base):
+    pass
+
+class Value(Base):
+    pass
+
+class Assignment(Base):
+    pass
+
+class Command(Base):
+    pass
+
+class Binding(Base):
+    pass
+
+class Block(Base):
+    pass
+
+class ProveControl(Base):
+    pass
+
+class Function:
+    def __init__(self, name: str, content: typing.List[Command], input:
+                 typing.List[Binding], output: Type, precondition: Bool,
+                 postcondition: Bool, return_value: Value):
+        self.name = name
+        self.content = content
+        self.input = input
+        self.output = output
+        self.precondition = precondition
+        self.postcondition = postcondition
+        self.return_value = return_value
+
+class Program(Base):
+    def __init__(self, content: typing.List[Function]):
         self.content = content
 
-class Bool:
-    pass
-
 class BAnd(Bool):
-    pass
+    def __init__(self, a: Bool, b: Bool):
+        self.a = a
+        self.b = b
 
 class BOr(Bool):
-    pass
+    def __init__(self, a: Bool, b: Bool):
+        self.a = a
+        self.b = b
 
 class BNot(Bool):
-    pass
+    def __init__(self, a: Bool):
+        self.a = a
 
 class BValue(Bool):
-    pass
+    def __init__(self, a: Value):
+        self.a = a
 
 class BTrue(Bool):
-    pass
+    def __init__(self):
+        self.a = True
 
 class BFalse(Bool):
-    pass
+    def __init__(self):
+        self.a = False
 
 class BEqual(Bool):
-    pass
+    def __init__(self, a: Expr, b: Expr):
+        self.a = a
+        self.b = b
 
 class BGreaterThan(Bool):
-    pass
+    def __init__(self, a: Expr, b: Expr):
+        self.a = a
+        self.b = b
 
 class BLowerThan(Bool):
-    pass
+    def __init__(self, a: Expr, b: Expr):
+        self.a = a
+        self.b = b
 
 class BGreaterEqual(Bool):
-    pass
+    def __init__(self, a: Expr, b: Expr):
+        self.a = a
+        self.b = b
 
 class BLowerEqual(Bool):
-    pass
-
-class ProveControl:
-    pass
+    def __init__(self, a: Expr, b: Expr):
+        self.a = a
+        self.b = b
 
 class PAssert(ProveControl):
-    pass
+    def __init__(self, a: Bool):
+        self.a = a
 
 class PAssume(ProveControl):
-    pass
+    def __init__(self, a: Bool):
+        self.a = a
 
 class PLoopInvariant(ProveControl):
-    pass
-
-class Type:
-    pass
+    def __init__(self, a: Bool):
+        self.a = a
 
 class TBool(Type):
     pass
@@ -62,16 +122,21 @@ class TI32(Type):
     pass
 
 class TTuple(Type):
-    pass
+    def __init__(self, a: typing.List[Type]):
+        self.a = a
 
 class TReference(Type):
-    pass
+    def __init__(self, a: Type):
+        self.a = a
 
 class TReferenceMutable(Type):
-    pass
+    def __init__(self, a: Type):
+        self.a = a
 
 class TArray(Type):
-    pass
+    def __init__(self, a: Type, length: int):
+        self.a = a
+        self.length = length
 
 class TUnit(Type):
     pass
@@ -79,35 +144,42 @@ class TUnit(Type):
 class TUnknown(Type):
     pass
 
-class Value:
-    pass
-
 class VExpr(Value):
-    pass
+    def __init__(self, a: Expr):
+        self.a = a
 
 class VBool(Value):
-    pass
+    def __init__(self, a: Bool):
+        self.a = a
 
 class VVariable(Value):
-    pass
+    def __init__(self, a: Variable):
+        self.a = a
 
 class VTuple(Value):
-    pass
+    def __init__(self, a: typing.List[Value]):
+        self.a = a
 
 class VArray(Value):
-    pass
+    def __init__(self, a: typing.List[Value]):
+        self.a = a
 
 class VFunctionCall(Value):
-    pass
+    def __init__(self, name: str, args: typing.List[Value]):
+        self.name = name
+        self.args = args
 
 class VDereference(Value):
-    pass
+    def __init__(self, a: Value):
+        self.a = a
 
 class VReference(Value):
-    pass
+    def __init__(self, a: Value):
+        self.a = a
 
 class VReferenceMutable(Value):
-    pass
+    def __init__(self, a: Value):
+        self.a = a
 
 class VUnit(Value):
     pass
@@ -115,74 +187,81 @@ class VUnit(Value):
 class VUnknown(Value):
     pass
 
-class Command:
-    pass
-
 class CBinding(Command):
-    pass
+    def __init__(self, a: Binding):
+        self.a = a
 
 class CAssignment(Command):
-    pass
+    def __init__(self, a: Assignment):
+        self.a = a
 
 class CProveControl(Command):
-    pass
+    def __init__(self, a: ProveControl):
+        self.a = a
 
 class CBlock(Command):
-    pass
+    def __init__(self, a: Block):
+        self.a = a
 
 class CNoop(Command):
     pass
 
-class Assignment:
-    pass
-
 class ATuple(Assignment):
-    pass
+    def __init__(self, a: typing.List[Assignment]):
+        self.a = a
 
 class ASingle(Assignment):
-    pass
-
-class Binding:
-    pass
+    def __init__(self, var: Variable, val: Value):
+        self.var = var
+        self.val = val
 
 class BDeclaration(Binding):
-    pass
+    def __init__(self, var: Variable, t: Type, m: bool):
+        self.var = var
+        self.t = t
+        self.m = m
 
 class BAssignment(Binding):
-    pass
+    def __init__(self, var: Variable, t: Type, m: bool, v: Value):
+        self.var = var
+        self.t = t
+        self.m = m
+        self.v = v
 
 class BTuple(Binding):
-    pass
-
-class Variable:
-    pass
+    def __init__(self, a: typing.List[Command]):
+        self.a = a
 
 class VNamed(Variable):
-    pass
+    def __init__(self, name: str):
+        self.name = name
 
 class VEmpty(Variable):
     pass
 
 class VArrayElem(Variable):
-    pass
+    def __init__(self, arr_name: str, index: Value):
+        self.arr_name = arr_name
+        self.index = index
 
 class VTupleElem(Variable):
-    pass
-
-class Expr:
-    pass
+    def __init__(self, tup_name: str, index: Value):
+        self.tup_name = tup_name
+        self.index = index
 
 class ENumber(Expr):
-    pass
+    def __init__(self, a: int):
+        self.a = a
 
 class EValue(Expr):
-    pass
+    def __init__(self, a: Value):
+        self.a = a
 
 class EOp(Expr):
-    pass
-
-class Opcode:
-    pass
+    def __init__(self, a: Expr, op: Opcode, b: Expr):
+        self.a = a
+        self.op = op
+        self.b = b
 
 class OMul(Opcode):
     pass
@@ -199,26 +278,23 @@ class OSub(Opcode):
 class ORem(Opcode):
     pass
 
-class Block:
-    pass
-
 class BIf(Block):
-    pass
+    def __init__(self, ifs: typing.List[Bool], blocks:
+                 typing.List[typing.List[Command]],
+                 el: typing.List[Command]):
+        self.ifs = ifs
+        self.blocks = blocks
+        self.el = el
 
 class BForRange(Block):
-    pass
+    def __init__(self, it: Variable, first: Value, last: Value, block:
+                 typing.List[Command]):
+        self.it = it
+        self.first = first
+        self.last = last
+        self.block = block
 
 class BWhile(Block):
-    pass
-
-class Function:
-    def __init__(self, name: str, content: typing.List[Command], input:
-                 typing.List[Binding], output: Type, precondition: Bool,
-                 postcondition: Bool, return_value: Value):
-        self.name = name
-        self.content = content
-        self.input = input
-        self.output = output
-        self.precondition = precondition
-        self.postcondition = postcondition
-        self.return_value = return_value
+    def __init__(self, cond: Bool, block: typing.List[Command]):
+        self.cond = cond
+        self.block = block
