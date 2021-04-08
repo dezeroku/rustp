@@ -16,7 +16,7 @@ def parse_json(filename):
 
 def main():
     code = parse_json("example.json")
-    #print(a)
+    print(code)
     #root = ast.Program(a["content"])
     #a = a["content"]
     #print(a)
