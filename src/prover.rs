@@ -164,6 +164,7 @@ fn add_variable(var: Variable, t: Type, v: Value, ctx: &z3::Context, sol: &z3::S
         _ => false,
     };
     // TODO: check if this covers all the AST entries
+    log::debug!("SET: {} = {:?}", var.clone(), v.clone());
     match t {
         Type::I32 => match var.clone() {
             Variable::Named(name) => {
@@ -191,13 +192,6 @@ fn add_variable(var: Variable, t: Type, v: Value, ctx: &z3::Context, sol: &z3::S
 
                 if unknown {
                 } else {
-                    log::debug!(
-                        "SET: {}[{}] = {:?}",
-                        arr_name.clone(),
-                        index.clone(),
-                        v.clone()
-                    );
-
                     let t = sol.assert(
                         &Bool::Equal(
                             Expr::Value(Box::new(Value::Variable(Variable::ArrayElem(
@@ -208,8 +202,6 @@ fn add_variable(var: Variable, t: Type, v: Value, ctx: &z3::Context, sol: &z3::S
                         )
                         .as_bool(ctx),
                     );
-
-                    log::debug!("{:?}", t);
                 }
             }
 
@@ -241,47 +233,28 @@ fn add_variable(var: Variable, t: Type, v: Value, ctx: &z3::Context, sol: &z3::S
                     &z3::Sort::int(ctx),
                 );
 
-                log::debug!("{}", t);
-
                 if unknown {
                 } else {
                     // Correctly assign specific values
                     match v {
                         Value::Array(a) => {
-                            log::debug!("SET: {} = {:?}", arr_name.clone(), a.clone());
                             let mut i = 0;
                             for va in a {
                                 match *ty {
-                                    Type::I32 => {
-                                        log::debug!(
-                                            "SET: {}[{}] = {:?}",
-                                            arr_name.clone(),
-                                            i.clone(),
-                                            va.clone()
-                                        );
-                                        let t = sol.assert(
-                                            &Bool::Equal(
-                                                Expr::Value(Box::new(Value::Variable(
-                                                    Variable::ArrayElem(
-                                                        arr_name.clone(),
-                                                        Box::new(Value::Expr(Expr::Number(i))),
-                                                    ),
-                                                ))),
-                                                Expr::Value(Box::new(va)),
-                                            )
-                                            .as_bool(ctx),
-                                        );
-
-                                        log::debug!("{:?}", t);
-                                    }
+                                    Type::I32 => sol.assert(
+                                        &Bool::Equal(
+                                            Expr::Value(Box::new(Value::Variable(
+                                                Variable::ArrayElem(
+                                                    arr_name.clone(),
+                                                    Box::new(Value::Expr(Expr::Number(i))),
+                                                ),
+                                            ))),
+                                            Expr::Value(Box::new(va)),
+                                        )
+                                        .as_bool(ctx),
+                                    ),
                                     Type::Bool => {
                                         // TODO: base on the work above, but we don't have Equals implemented for Bool at the moment
-                                        log::debug!(
-                                            "SET: {}[{}] = {:?}",
-                                            arr_name.clone(),
-                                            i.clone(),
-                                            va.clone()
-                                        );
                                     }
                                     // Tuple and array types do not have to be covered, however references have to
                                     _ => unimplemented!(),

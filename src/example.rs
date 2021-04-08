@@ -48,15 +48,18 @@ fn c(a: i32, xdd: i32) {
 
     let x: i32 = 3;
     let y: i32 = x + 12;
-    let z: i32 = x + 12 - y;
+    let mut z: i32 = x + 12 - y;
     //%assert a == 0
     //%assert x == 3
     //%assert z == y - 15
+    z = 130;
+    ////%assert z == 130
     //%assert a + xdd == 13
 }
 
 fn array_prove() {
     let mut x: [i32; 3] = [1, 2, 3];
+    let y: [i32; 3];
     //%assert x[0] == 1
     //%assert x[0] + x[1] == 3
 
