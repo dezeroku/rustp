@@ -113,6 +113,15 @@ fn prove_frame(frame: context::Frame) -> Option<z3::SatResult> {
         log::debug!("{:?}", f);
         log::debug!("{:?}", t.get_model());
         result = Some(f);
+        match result {
+            Some(z3::SatResult::Sat) => {
+                log::info!("Model: {:?}", t.get_model());
+            }
+            Some(z3::SatResult::Unsat) => {
+                log::info!("Proven: {}", frame.command);
+            }
+            _ => {}
+        }
     } else {
         //println!("Nothing to prove!");
         result = None;
@@ -154,6 +163,7 @@ fn add_variable(var: Variable, t: Type, v: Value, ctx: &z3::Context, sol: &z3::S
         Value::Unknown => true,
         _ => false,
     };
+    // TODO: check if this covers all the AST entries
     match t {
         Type::I32 => match var.clone() {
             Variable::Named(name) => {
@@ -169,6 +179,40 @@ fn add_variable(var: Variable, t: Type, v: Value, ctx: &z3::Context, sol: &z3::S
                     );
                 }
             }
+            Variable::ArrayElem(arr_name, index) => {
+                // TODO: define indices properly, don't allow ALL the values
+                // should we even define this array here instead of in the Type:Array?
+                let t = z3::ast::Array::new_const(
+                    ctx,
+                    arr_name.clone(),
+                    &z3::Sort::int(ctx),
+                    &z3::Sort::int(ctx),
+                );
+
+                if unknown {
+                } else {
+                    log::debug!(
+                        "SET: {}[{}] = {:?}",
+                        arr_name.clone(),
+                        index.clone(),
+                        v.clone()
+                    );
+
+                    let t = sol.assert(
+                        &Bool::Equal(
+                            Expr::Value(Box::new(Value::Variable(Variable::ArrayElem(
+                                arr_name.clone(),
+                                index,
+                            )))),
+                            Expr::Value(Box::new(v)),
+                        )
+                        .as_bool(ctx),
+                    );
+
+                    log::debug!("{:?}", t);
+                }
+            }
+
             _ => unimplemented!(),
         },
         Type::Bool => match var.clone() {
@@ -184,6 +228,69 @@ fn add_variable(var: Variable, t: Type, v: Value, ctx: &z3::Context, sol: &z3::S
                             &[&z3::ast::Bool::new_const(ctx, name), &v.as_bool(ctx)],
                         )],
                     ));
+                }
+            }
+            _ => unimplemented!(),
+        },
+        Type::Array(ty, _) => match var.clone() {
+            Variable::Named(arr_name) => {
+                let t = z3::ast::Array::new_const(
+                    ctx,
+                    arr_name.clone(),
+                    &z3::Sort::int(ctx),
+                    &z3::Sort::int(ctx),
+                );
+
+                log::debug!("{}", t);
+
+                if unknown {
+                } else {
+                    // Correctly assign specific values
+                    match v {
+                        Value::Array(a) => {
+                            log::debug!("SET: {} = {:?}", arr_name.clone(), a.clone());
+                            let mut i = 0;
+                            for va in a {
+                                match *ty {
+                                    Type::I32 => {
+                                        log::debug!(
+                                            "SET: {}[{}] = {:?}",
+                                            arr_name.clone(),
+                                            i.clone(),
+                                            va.clone()
+                                        );
+                                        let t = sol.assert(
+                                            &Bool::Equal(
+                                                Expr::Value(Box::new(Value::Variable(
+                                                    Variable::ArrayElem(
+                                                        arr_name.clone(),
+                                                        Box::new(Value::Expr(Expr::Number(i))),
+                                                    ),
+                                                ))),
+                                                Expr::Value(Box::new(va)),
+                                            )
+                                            .as_bool(ctx),
+                                        );
+
+                                        log::debug!("{:?}", t);
+                                    }
+                                    Type::Bool => {
+                                        // TODO: base on the work above, but we don't have Equals implemented for Bool at the moment
+                                        log::debug!(
+                                            "SET: {}[{}] = {:?}",
+                                            arr_name.clone(),
+                                            i.clone(),
+                                            va.clone()
+                                        );
+                                    }
+                                    // Tuple and array types do not have to be covered, however references have to
+                                    _ => unimplemented!(),
+                                }
+                                i += 1;
+                            }
+                        }
+                        _ => unimplemented!(),
+                    }
                 }
             }
             _ => unimplemented!(),
@@ -206,7 +313,16 @@ impl ProvableValue for Value {
             Value::Variable(x) => match x {
                 Variable::Named(name) => z3::ast::Bool::new_const(ctx, name),
                 Variable::Empty => unimplemented!(),
-                Variable::ArrayElem(name, ind) => unimplemented!(),
+                Variable::ArrayElem(arr_name, ind) => {
+                    let t = z3::ast::Array::new_const(
+                        ctx,
+                        arr_name,
+                        &z3::Sort::int(ctx),
+                        &z3::Sort::int(ctx),
+                    );
+
+                    t.select(&ind.as_int(ctx)).as_bool().unwrap()
+                }
                 Variable::TupleElem(name, ind) => unimplemented!(),
             },
             Value::Tuple(t) => unimplemented!(),
@@ -227,7 +343,17 @@ impl ProvableValue for Value {
             Value::Variable(x) => match x {
                 Variable::Named(name) => z3::ast::Int::new_const(ctx, name),
                 Variable::Empty => unimplemented!(),
-                Variable::ArrayElem(name, ind) => unimplemented!(),
+                Variable::ArrayElem(arr_name, ind) => {
+                    let t = z3::ast::Array::new_const(
+                        ctx,
+                        arr_name,
+                        &z3::Sort::int(ctx),
+                        &z3::Sort::int(ctx),
+                    );
+
+                    t.select(&ind.as_int(ctx)).as_int().unwrap()
+                }
+
                 Variable::TupleElem(name, ind) => unimplemented!(),
             },
             Value::Tuple(t) => unimplemented!(),
@@ -316,7 +442,11 @@ impl ProvableCommand for Command {
             Command::ProveControl(a) => match a {
                 // We are trying to find COUNTER example here.
                 // So if we get sat, then it means that the assertion is actually incorrect
-                ProveControl::Assert(b) => (true, b.as_bool(ctx).not()),
+                ProveControl::Assert(b) => {
+                    let x = b.as_bool(ctx).not();
+                    log::debug!("ASSERT: {}", x);
+                    (true, x)
+                }
                 ProveControl::Assume(b) => {
                     // No need to prove these, we believe them without testing
                     // Just pas the information from that further on

@@ -42,9 +42,8 @@ fn remainder(x: i32, y: i32) -> (i32, i32) {
     (quo, rem)
 }
 
-//%precondition a==0
+//%precondition a==0 && xdd == 13
 fn c(a: i32, xdd: i32) {
-    // TODO: take the values from precondition and postcondition and apply them in the proving process
     // Assumes should be just taken into the context it seems. Just asserting them will be enough?
 
     let x: i32 = 3;
@@ -53,4 +52,15 @@ fn c(a: i32, xdd: i32) {
     //%assert a == 0
     //%assert x == 3
     //%assert z == y - 15
+    //%assert a + xdd == 13
+}
+
+fn array_prove() {
+    let mut x: [i32; 3] = [1, 2, 3];
+    //%assert x[0] == 1
+    //%assert x[0] + x[1] == 3
+
+    // TODO:
+    //x[1] = 3;
+    ////%assert x[1] == 3
 }

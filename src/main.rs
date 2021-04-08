@@ -134,6 +134,7 @@ fn prove(input: ast::Program) {
         println!("Failed to prove!");
         std::process::exit(5);
     }
+    println!("Successfully proved the whole program!");
 }
 
 fn main() {
@@ -167,11 +168,11 @@ fn main() {
     validate(simplified.clone());
 
     // Drop the content to a file as JSON
-    let j = serde_json::to_string(&simplified).unwrap();
-    fs::write("./example.json", j).expect("Unable to write temp AST file!");
-    log::debug!("Saved the temp AST data as example.json");
+    //let j = serde_json::to_string(&simplified).unwrap();
+    //fs::write("./example.json", j).expect("Unable to write temp AST file!");
+    //log::debug!("Saved the temp AST data as example.json");
 
-    //prove(simplified.clone());
+    prove(simplified.clone());
     println!();
     //if verbosity >= 2 {
     //    for func in simplified.content.clone() {
