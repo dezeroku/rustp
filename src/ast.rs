@@ -1,5 +1,18 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::fmt;
+
+macro_rules! set {
+    ( $( $x:expr ),* ) => {  // Match zero or more comma delimited items
+        {
+            let mut temp_set = HashSet::new();  // Create a mutable HashSet
+            $(
+                temp_set.insert($x); // Insert each item matched into the HashSet
+            )*
+            temp_set // Return the populated HashSet
+        }
+    };
+}
 
 #[derive(PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct Program {
@@ -65,6 +78,20 @@ impl fmt::Display for ProveControl {
             ProveControl::Assert(x) => write!(f, "(assert {})", x),
             ProveControl::Assume(x) => write!(f, "(assume {})", x),
             ProveControl::LoopInvariant(x) => write!(f, "(loop_invariant {})", x),
+        }
+    }
+}
+
+trait ProveControlFuncs {
+    fn get_bool(self) -> Bool;
+}
+
+impl ProveControlFuncs for ProveControl {
+    fn get_bool(self) -> Bool {
+        match self {
+            ProveControl::Assert(a) => a,
+            ProveControl::Assume(a) => a,
+            ProveControl::LoopInvariant(a) => a,
         }
     }
 }
@@ -327,5 +354,441 @@ impl fmt::Display for Function {
             "fn {}({}) -> {} () \n{}",
             self.name, input, self.output, temp
         )
+    }
+}
+
+trait VarGetter {
+    fn get_variables(self) -> HashSet<Variable>;
+}
+
+impl VarGetter for Assignment {
+    fn get_variables(self) -> HashSet<Variable> {
+        match self {
+            Assignment::Tuple(v) => {
+                let mut a = HashSet::new();
+                for i in v {
+                    let t = i.get_variables();
+                    // merge a and t
+                    a.extend(t);
+                }
+                a
+            }
+            Assignment::Single(var, val) => {
+                let mut a = var.get_variables();
+                let f = val.get_variables();
+                a.extend(f);
+                a
+            }
+        }
+    }
+}
+
+impl VarGetter for Binding {
+    fn get_variables(self) -> HashSet<Variable> {
+        match self {
+            Binding::Declaration(var, _, _) => var.get_variables(),
+            Binding::Assignment(var, _, val, _) => {
+                let mut a = var.get_variables();
+                a.extend(val.get_variables());
+                a
+            }
+            Binding::Tuple(vec) => {
+                let mut a = HashSet::new();
+                for i in vec {
+                    let t = i.get_variables();
+                    a.extend(t);
+                }
+
+                a
+            }
+        }
+    }
+}
+
+impl VarGetter for Block {
+    fn get_variables(self) -> HashSet<Variable> {
+        match self {
+            Block::If(conds, ifs, el) => {
+                let mut a = HashSet::new();
+
+                for i in conds {
+                    let t = i.get_variables();
+                    a.extend(t);
+                }
+
+                for j in ifs {
+                    for i in j {
+                        let t = i.get_variables();
+                        a.extend(t);
+                    }
+                }
+
+                for i in el {
+                    let t = i.get_variables();
+                    a.extend(t);
+                }
+
+                a
+            }
+            Block::ForRange(var, first, last, vec) => {
+                let mut a = var.get_variables();
+                a.extend(first.get_variables());
+                a.extend(last.get_variables());
+
+                for i in vec {
+                    let t = i.get_variables();
+                    a.extend(t);
+                }
+
+                a
+            }
+            Block::While(b, vec) => {
+                let mut a = b.get_variables();
+                for i in vec {
+                    let t = i.get_variables();
+                    a.extend(t);
+                }
+
+                a
+            }
+        }
+    }
+}
+
+impl VarGetter for Bool {
+    fn get_variables(self) -> HashSet<Variable> {
+        match self {
+            Bool::And(a, b) => {
+                let mut t = a.get_variables();
+                t.extend(b.get_variables());
+
+                t
+            }
+            Bool::Or(a, b) => {
+                let mut t = a.get_variables();
+                t.extend(b.get_variables());
+
+                t
+            }
+            Bool::Not(a) => a.get_variables(),
+            Bool::Value(a) => a.get_variables(),
+            Bool::True => HashSet::new(),
+            Bool::False => HashSet::new(),
+            Bool::Equal(a, b) => {
+                let mut t = a.get_variables();
+                t.extend(b.get_variables());
+
+                t
+            }
+            Bool::GreaterEqual(a, b) => {
+                let mut t = a.get_variables();
+                t.extend(b.get_variables());
+
+                t
+            }
+            Bool::LowerEqual(a, b) => {
+                let mut t = a.get_variables();
+                t.extend(b.get_variables());
+
+                t
+            }
+            Bool::GreaterThan(a, b) => {
+                let mut t = a.get_variables();
+                t.extend(b.get_variables());
+
+                t
+            }
+            Bool::LowerThan(a, b) => {
+                let mut t = a.get_variables();
+                t.extend(b.get_variables());
+
+                t
+            }
+        }
+    }
+}
+
+impl VarGetter for Command {
+    fn get_variables(self) -> HashSet<Variable> {
+        match self {
+            Command::Binding(a) => a.get_variables(),
+            Command::Assignment(a) => a.get_variables(),
+            Command::ProveControl(a) => a.get_variables(),
+            Command::Block(a) => a.get_variables(),
+            Command::Noop => HashSet::new(),
+        }
+    }
+}
+
+impl VarGetter for Expr {
+    fn get_variables(self) -> HashSet<Variable> {
+        match self {
+            Expr::Number(_) => HashSet::new(),
+            Expr::Value(v) => v.get_variables(),
+            Expr::Op(a, _, b) => {
+                let mut t = a.get_variables();
+                t.extend(b.get_variables());
+
+                t
+            }
+        }
+    }
+}
+
+impl VarGetter for ProveControl {
+    fn get_variables(self) -> HashSet<Variable> {
+        self.get_bool().get_variables()
+    }
+}
+
+impl VarGetter for Value {
+    fn get_variables(self) -> HashSet<Variable> {
+        match self {
+            Value::Expr(a) => a.get_variables(),
+            Value::Bool(a) => a.get_variables(),
+            Value::Variable(a) => a.get_variables(),
+            Value::Tuple(vals) => {
+                let mut a = HashSet::new();
+                for i in vals {
+                    let t = i.get_variables();
+                    a.extend(t);
+                }
+
+                a
+            }
+            Value::Array(vals) => {
+                let mut a = HashSet::new();
+                for i in vals {
+                    let t = i.get_variables();
+                    a.extend(t);
+                }
+
+                a
+            }
+            Value::FunctionCall(_, vals) => {
+                let mut a = HashSet::new();
+                for i in vals {
+                    let t = i.get_variables();
+                    a.extend(t);
+                }
+
+                a
+            }
+            Value::Dereference(a) => a.get_variables(),
+            Value::Reference(a) => a.get_variables(),
+            Value::ReferenceMutable(a) => a.get_variables(),
+            Value::Unit => HashSet::new(),
+            Value::Unknown => HashSet::new(),
+        }
+    }
+}
+
+impl VarGetter for Variable {
+    fn get_variables(self) -> HashSet<Variable> {
+        match self.clone() {
+            Variable::Named(_) => set!(self),
+            Variable::Empty => HashSet::new(),
+            Variable::ArrayElem(_, a) => {
+                let mut t = HashSet::new();
+                t.insert(self);
+                t.extend(a.get_variables());
+                t
+            }
+            Variable::TupleElem(_, a) => {
+                let mut t = HashSet::new();
+                t.insert(self);
+                t.extend(a.get_variables());
+                t
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn get_variables_assignment1() {
+        assert_eq!(
+            Assignment::Single(Variable::Named(String::from("x")), Value::Unit).get_variables(),
+            set![Variable::Named(String::from("x"))]
+        );
+    }
+
+    #[test]
+    fn get_variables_assignment2() {
+        assert_eq!(
+            Assignment::Single(
+                Variable::Named(String::from("x")),
+                Value::Variable(Variable::Named(String::from("y")))
+            )
+            .get_variables(),
+            set![
+                Variable::Named(String::from("x")),
+                Variable::Named(String::from("y"))
+            ]
+        );
+    }
+
+    #[test]
+    fn get_variables_assignment3() {
+        assert_eq!(
+            Assignment::Tuple(vec![
+                Assignment::Single(
+                    Variable::Named(String::from("x")),
+                    Value::Variable(Variable::Named(String::from("y"))),
+                ),
+                Assignment::Single(Variable::Named(String::from("z")), Value::Unit),
+            ])
+            .get_variables(),
+            set![
+                Variable::Named(String::from("x")),
+                Variable::Named(String::from("y")),
+                Variable::Named(String::from("z"))
+            ]
+        );
+    }
+
+    #[test]
+    fn get_variables_assignment4_dedup() {
+        assert_eq!(
+            Assignment::Tuple(vec![
+                Assignment::Single(
+                    Variable::Named(String::from("x")),
+                    Value::Variable(Variable::Named(String::from("y")))
+                ),
+                Assignment::Single(Variable::Named(String::from("x")), Value::Unit),
+            ])
+            .get_variables(),
+            set![
+                Variable::Named(String::from("x")),
+                Variable::Named(String::from("y"))
+            ]
+        );
+    }
+
+    #[test]
+    fn get_variables_binding1() {
+        assert_eq!(
+            Binding::Declaration(Variable::Named(String::from("x")), Type::Unknown, false)
+                .get_variables(),
+            set![Variable::Named(String::from("x"))]
+        );
+    }
+
+    #[test]
+    fn get_variables_binding2() {
+        assert_eq!(
+            Binding::Assignment(
+                Variable::Named(String::from("x")),
+                Type::Unknown,
+                Value::Variable(Variable::Named(String::from("y"))),
+                false
+            )
+            .get_variables(),
+            set![
+                Variable::Named(String::from("x")),
+                Variable::Named(String::from("y"))
+            ]
+        );
+    }
+
+    #[test]
+    fn get_variables_binding3() {
+        assert_eq!(
+            Binding::Tuple(vec![
+                Command::Binding(Binding::Assignment(
+                    Variable::Named(String::from("x")),
+                    Type::Unknown,
+                    Value::Variable(Variable::Named(String::from("y"))),
+                    false
+                )),
+                Command::Binding(Binding::Declaration(
+                    Variable::Named(String::from("x")),
+                    Type::Unknown,
+                    false
+                ))
+            ])
+            .get_variables(),
+            set![
+                Variable::Named(String::from("x")),
+                Variable::Named(String::from("y"))
+            ]
+        );
+    }
+
+    #[test]
+    fn get_variables_block_if1() {
+        assert_eq!(
+            Block::If(
+                vec![Bool::Value(Box::new(Value::Variable(Variable::ArrayElem(
+                    String::from("arr"),
+                    Box::new(Value::Variable(Variable::Named(String::from("y"))))
+                ))))],
+                vec![vec![Command::Binding(Binding::Assignment(
+                    Variable::Named(String::from("x")),
+                    Type::Unknown,
+                    Value::Unit,
+                    false
+                )),]],
+                Vec::new()
+            )
+            .get_variables(),
+            set![
+                Variable::ArrayElem(
+                    String::from("arr"),
+                    Box::new(Value::Variable(Variable::Named(String::from("y"))))
+                ),
+                Variable::Named(String::from("y")),
+                Variable::Named(String::from("x"))
+            ]
+        );
+    }
+
+    #[test]
+    fn get_variables_block_for1() {
+        assert_eq!(
+            Block::ForRange(
+                Variable::Named(String::from("i")),
+                Value::Variable(Variable::Named(String::from("first")),),
+                Value::Variable(Variable::Named(String::from("second")),),
+                vec![Command::Binding(Binding::Assignment(
+                    Variable::Named(String::from("x")),
+                    Type::Unknown,
+                    Value::Unit,
+                    false
+                )),],
+            )
+            .get_variables(),
+            set![
+                Variable::Named(String::from("i")),
+                Variable::Named(String::from("first")),
+                Variable::Named(String::from("second")),
+                Variable::Named(String::from("x"))
+            ]
+        );
+    }
+
+    #[test]
+    fn get_variables_block_while1() {
+        assert_eq!(
+            Block::While(
+                Bool::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                    "check"
+                ))))),
+                vec![Command::Binding(Binding::Assignment(
+                    Variable::Named(String::from("x")),
+                    Type::Unknown,
+                    Value::Unit,
+                    false
+                )),],
+            )
+            .get_variables(),
+            set![
+                Variable::Named(String::from("check")),
+                Variable::Named(String::from("x"))
+            ]
+        );
     }
 }
