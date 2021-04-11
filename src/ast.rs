@@ -357,6 +357,105 @@ impl fmt::Display for Function {
     }
 }
 
+/// List all the variables that are assigned to
+trait AffectedVarGetter {
+    fn get_affected_variables(self) -> HashSet<Variable>;
+}
+
+impl AffectedVarGetter for Assignment {
+    fn get_affected_variables(self) -> HashSet<Variable> {
+        match self {
+            Assignment::Tuple(v) => {
+                let mut a = HashSet::new();
+                for i in v {
+                    let t = i.get_affected_variables();
+                    // merge a and t
+                    a.extend(t);
+                }
+                a
+            }
+            Assignment::Single(var, _) => {
+                let mut a = var.get_variables();
+                a
+            }
+        }
+    }
+}
+
+impl AffectedVarGetter for Binding {
+    fn get_affected_variables(self) -> HashSet<Variable> {
+        match self {
+            Binding::Declaration(var, _, _) => var.get_variables(),
+            Binding::Assignment(var, _, _, _) => var.get_variables(),
+            Binding::Tuple(vec) => {
+                let mut a = HashSet::new();
+                for i in vec {
+                    let t = i.get_affected_variables();
+                    a.extend(t);
+                }
+
+                a
+            }
+        }
+    }
+}
+
+impl AffectedVarGetter for Block {
+    fn get_affected_variables(self) -> HashSet<Variable> {
+        match self {
+            Block::If(_, ifs, el) => {
+                let mut a = HashSet::new();
+
+                for j in ifs {
+                    for i in j {
+                        let t = i.get_affected_variables();
+                        a.extend(t);
+                    }
+                }
+
+                for i in el {
+                    let t = i.get_affected_variables();
+                    a.extend(t);
+                }
+
+                a
+            }
+            Block::ForRange(var, _, _, vec) => {
+                let mut a = var.get_variables();
+
+                for i in vec {
+                    let t = i.get_affected_variables();
+                    a.extend(t);
+                }
+
+                a
+            }
+            Block::While(_, vec) => {
+                let mut a = HashSet::new();
+                for i in vec {
+                    let t = i.get_affected_variables();
+                    a.extend(t);
+                }
+
+                a
+            }
+        }
+    }
+}
+
+impl AffectedVarGetter for Command {
+    fn get_affected_variables(self) -> HashSet<Variable> {
+        match self {
+            Command::Binding(a) => a.get_affected_variables(),
+            Command::Assignment(a) => a.get_affected_variables(),
+            Command::ProveControl(a) => HashSet::new(),
+            Command::Block(a) => a.get_affected_variables(),
+            Command::Noop => HashSet::new(),
+        }
+    }
+}
+
+/// List all the variables that are used
 trait VarGetter {
     fn get_variables(self) -> HashSet<Variable>;
 }
@@ -651,6 +750,18 @@ mod test {
     }
 
     #[test]
+    fn get_affected_variables_assignment1() {
+        assert_eq!(
+            Assignment::Single(
+                Variable::Named(String::from("x")),
+                Value::Variable(Variable::Named(String::from("y")))
+            )
+            .get_affected_variables(),
+            set![Variable::Named(String::from("x"))]
+        );
+    }
+
+    #[test]
     fn get_variables_assignment4_dedup() {
         assert_eq!(
             Assignment::Tuple(vec![
@@ -715,6 +826,20 @@ mod test {
                 Variable::Named(String::from("x")),
                 Variable::Named(String::from("y"))
             ]
+        );
+    }
+
+    #[test]
+    fn get_affected_variables_binding1() {
+        assert_eq!(
+            Binding::Assignment(
+                Variable::Named(String::from("x")),
+                Type::Unknown,
+                Value::Variable(Variable::Named(String::from("y"))),
+                false
+            )
+            .get_affected_variables(),
+            set![Variable::Named(String::from("x"))]
         );
     }
 
