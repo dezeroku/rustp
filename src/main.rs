@@ -7,7 +7,6 @@ mod validator;
 
 use clap::{App, Arg};
 use env_logger::Builder;
-use serde_json::Result;
 use std::fs;
 use std::process::{Command, Stdio};
 
@@ -164,14 +163,7 @@ fn main() {
     //    println!("After: |{}|", simplified);
     //}
 
-    // Move this part to python for now
     validate(simplified.clone());
-
-    // Drop the content to a file as JSON
-    //let j = serde_json::to_string(&simplified).unwrap();
-    //fs::write("./example.json", j).expect("Unable to write temp AST file!");
-    //log::debug!("Saved the temp AST data as example.json");
-
     prove(simplified.clone());
     println!();
     //if verbosity >= 2 {
