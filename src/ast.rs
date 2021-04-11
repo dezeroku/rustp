@@ -374,8 +374,7 @@ impl AffectedVarGetter for Assignment {
                 a
             }
             Assignment::Single(var, _) => {
-                let mut a = var.get_variables();
-                a
+                var.get_variables()
             }
         }
     }
@@ -447,7 +446,7 @@ impl AffectedVarGetter for Command {
         match self {
             Command::Binding(a) => a.get_affected_variables(),
             Command::Assignment(a) => a.get_affected_variables(),
-            Command::ProveControl(a) => HashSet::new(),
+            Command::ProveControl(_) => HashSet::new(),
             Command::Block(a) => a.get_affected_variables(),
             Command::Noop => HashSet::new(),
         }

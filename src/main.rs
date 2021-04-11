@@ -13,7 +13,8 @@ use std::process::{Command, Stdio};
 extern crate log;
 
 fn rustc_check(filename: &str) {
-    // Is handling Windows required?
+    // TODO: Is handling Windows required?
+    // This would require properly managing the /tmp, seems to be cheap
     let status = Command::new("rustc")
         .arg(filename)
         .arg("--out-dir")
@@ -150,29 +151,9 @@ fn main() {
     rustc_check(filename);
 
     let tree = parse(filename);
-    let f = tree.clone();
     let simplified = simplifier::simplify(tree);
-
-    // We assume that at the stage of proving, all the types are already solved.
-    // If that's not the case, something is wrong in our inferring
-    // TODO: add a check for this
-    //if verbosity >= 2 {
-    //    println!();
-    //    println!("Before: |{}|", f);
-    //    println!();
-    //    println!("After: |{}|", simplified);
-    //}
 
     validate(simplified.clone());
     prove(simplified.clone());
     println!();
-    //if verbosity >= 2 {
-    //    for func in simplified.content.clone() {
-    //        for i in context::get_context_func(func, simplified.clone()) {
-    //            println!("{:?}", i);
-    //            println!();
-    //        }
-    //    }
-    //}
-    //fs::write("./example.z3", val).expect("Unable to write file");
 }
