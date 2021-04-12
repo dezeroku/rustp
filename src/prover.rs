@@ -38,26 +38,80 @@ pub fn prove(input: Program) -> bool {
             func.postcondition.clone(),
         )));
 
-        to_prove.content = temp;
+        to_prove.content = temp.clone();
 
-        let con = context::get_context_func(to_prove, input.clone());
-        // Try to prove
-        //println!("{:?}", con);
+        let mut to_prove_vec = Vec::new();
 
-        for frame in con {
-            log::debug!("{:?}", frame);
-            let sat = prove_frame(frame.clone());
-            match sat {
-                None => {}
-                Some(a) => {
-                    // A counter example was found - our check failed
-                    if a != z3::SatResult::Unsat {
-                        println!("Failed to prove: {}", frame.command);
-                        return false;
-                    }
+        let mut check = true;
+        while check {
+            let t = temp.pop();
+            match t {
+                Some(x) => {
+                    to_prove_vec.push(x);
+                }
+                None => {
+                    check = false;
                 }
             }
         }
+        // TODO:
+        // The whole function is {P} S {Q} (precondtion, code, postcondition)
+
+        // for command in list of commands backwards:
+        // get the P and Q for the command
+        // check if this implies?
+        // do the same for next command, but use P as Q
+
+        let mut q = Bool::True;
+        let mut p;
+        for command in to_prove_vec {
+            // Get p based on the command
+            p = command.get_pre(q.clone());
+
+            let mut cfg = z3::Config::new();
+            cfg.set_model_generation(true);
+
+            let ctx = z3::Context::new(&cfg);
+            let t = z3::Solver::new(&ctx);
+
+            t.assert(&p.clone().as_bool(&ctx).implies(&q.as_bool(&ctx)));
+
+            let f = t.check();
+            log::debug!("{:?}", f);
+            log::debug!("{:?}", t.get_model());
+            let result = Some(f);
+
+            match result {
+                Some(z3::SatResult::Unsat) => {
+                    return false;
+                }
+                Some(z3::SatResult::Sat) => {
+                    //log::info!("Proven: {}", command);
+                    log::info!("Model: {:?}", t.get_model());
+                }
+                _ => {}
+            }
+
+            q = p;
+        }
+        //let con = context::get_context_func(to_prove, input.clone());
+        //// Try to prove
+        ////println!("{:?}", con);
+
+        //for frame in con {
+        //    log::debug!("{:?}", frame);
+        //    let sat = prove_frame(frame.clone());
+        //    match sat {
+        //        None => {}
+        //        Some(a) => {
+        //            // A counter example was found - our check failed
+        //            if a != z3::SatResult::Unsat {
+        //                println!("Failed to prove: {}", frame.command);
+        //                return false;
+        //            }
+        //        }
+        //    }
+        //}
 
         log::info!("Successfully proved function: {}", f_name);
     }
@@ -97,6 +151,49 @@ pub fn prove(input: Program) -> bool {
     //////println!("{:?}", t.get_proof());
     //println!("DONE");
     true
+}
+
+trait Provable {
+    /// Find the P for {P} S {Q} to prove
+    fn get_pre(self, q: Bool) -> Bool;
+}
+
+impl Provable for Command {
+    fn get_pre(self, q: Bool) -> Bool {
+        match self {
+            Command::Binding(x) => x.get_pre(q),
+            Command::Assignment(x) => unimplemented!(),
+            Command::ProveControl(x) => x.get_pre(q),
+            Command::Block(x) => unimplemented!(),
+            Command::Noop => Bool::True,
+        }
+    }
+}
+
+impl Provable for Binding {
+    fn get_pre(self, q: Bool) -> Bool {
+        match self {
+            Binding::Declaration(var, t, m) => Bool::True,
+
+            Binding::Assignment(var, t, val, m) => {
+                // Swap all `var` occurences with the `val` in the condition
+                q.swap(var, val)
+            }
+            Binding::Tuple(vec) => {
+                unimplemented!()
+            }
+        }
+    }
+}
+
+impl Provable for ProveControl {
+    fn get_pre(self, q: Bool) -> Bool {
+        match self {
+            ProveControl::Assert(a) => a,
+            ProveControl::Assume(a) => a,
+            ProveControl::LoopInvariant(a) => a,
+        }
+    }
 }
 
 fn prove_frame(frame: context::Frame) -> Option<z3::SatResult> {

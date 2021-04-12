@@ -62,6 +62,18 @@ impl fmt::Display for Bool {
     }
 }
 
+pub trait Swapper {
+    /// Swap all the occurences of `var` with `val`
+    fn swap(self, var: Variable, val: Value) -> Bool;
+}
+
+impl Swapper for Bool {
+    fn swap(self, var: Variable, val: Value) -> Bool {
+        // TODO: implement
+        self
+    }
+}
+
 #[derive(PartialEq, Clone, Debug, Hash, Eq)]
 pub enum ProveControl {
     Assert(Bool),
@@ -81,7 +93,7 @@ impl fmt::Display for ProveControl {
     }
 }
 
-trait ProveControlFuncs {
+pub trait ProveControlFuncs {
     fn get_bool(self) -> Bool;
 }
 
@@ -357,7 +369,7 @@ impl fmt::Display for Function {
 }
 
 /// List all the variables that are assigned to
-trait AffectedVarGetter {
+pub trait AffectedVarGetter {
     fn get_affected_variables(self) -> HashSet<Variable>;
 }
 
@@ -373,9 +385,7 @@ impl AffectedVarGetter for Assignment {
                 }
                 a
             }
-            Assignment::Single(var, _) => {
-                var.get_variables()
-            }
+            Assignment::Single(var, _) => var.get_variables(),
         }
     }
 }
@@ -454,7 +464,7 @@ impl AffectedVarGetter for Command {
 }
 
 /// List all the variables that are used
-trait VarGetter {
+pub trait VarGetter {
     fn get_variables(self) -> HashSet<Variable>;
 }
 

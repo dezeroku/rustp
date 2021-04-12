@@ -1,4 +1,10 @@
+fn easy() {
+    let a: i32 = 12;
+    //%assert a == 12
+}
+
 fn main() {
+    for i in 0..12 {}
     let a: i32 = 12;
     let b: i32 = 3 + a;
 
