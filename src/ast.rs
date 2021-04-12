@@ -62,18 +62,6 @@ impl fmt::Display for Bool {
     }
 }
 
-pub trait Swapper {
-    /// Swap all the occurences of `var` with `val`
-    fn swap(self, var: Variable, val: Value) -> Bool;
-}
-
-impl Swapper for Bool {
-    fn swap(self, var: Variable, val: Value) -> Bool {
-        // TODO: implement
-        self
-    }
-}
-
 #[derive(PartialEq, Clone, Debug, Hash, Eq)]
 pub enum ProveControl {
     Assert(Bool),
@@ -711,6 +699,99 @@ impl VarGetter for Variable {
     }
 }
 
+pub trait Swapper {
+    /// Swap all the occurences of `var` with `val`
+    fn swap(self, var: Variable, val: Value) -> Self;
+}
+
+impl Swapper for Bool {
+    fn swap(self, var: Variable, val: Value) -> Self {
+        match self {
+            Bool::And(a, b) => Bool::And(
+                Box::new(a.swap(var.clone(), val.clone())),
+                Box::new(b.swap(var, val)),
+            ),
+            Bool::Or(a, b) => Bool::Or(
+                Box::new(a.swap(var.clone(), val.clone())),
+                Box::new(b.swap(var, val)),
+            ),
+            Bool::Not(a) => Bool::Not(Box::new(a.swap(var.clone(), val.clone()))),
+            Bool::Value(a) => Bool::Value(Box::new(a.swap(var.clone(), val.clone()))),
+            Bool::True => Bool::True,
+            Bool::False => Bool::False,
+            Bool::Equal(a, b) => Bool::Equal(a.swap(var.clone(), val.clone()), b.swap(var, val)),
+            Bool::GreaterEqual(a, b) => {
+                Bool::GreaterEqual(a.swap(var.clone(), val.clone()), b.swap(var, val))
+            }
+            Bool::LowerEqual(a, b) => {
+                Bool::LowerEqual(a.swap(var.clone(), val.clone()), b.swap(var, val))
+            }
+            Bool::GreaterThan(a, b) => {
+                Bool::GreaterThan(a.swap(var.clone(), val.clone()), b.swap(var, val))
+            }
+            Bool::LowerThan(a, b) => {
+                Bool::LowerThan(a.swap(var.clone(), val.clone()), b.swap(var, val))
+            }
+        }
+    }
+}
+
+impl Swapper for Expr {
+    fn swap(self, var: Variable, val: Value) -> Self {
+        match self {
+            Expr::Number(_) => self,
+            Expr::Op(a, op, b) => Expr::Op(
+                Box::new(a.swap(var.clone(), val.clone())),
+                op,
+                Box::new(b.swap(var, val)),
+            ),
+            Expr::Value(v) => Expr::Value(Box::new(v.swap(var, val))),
+        }
+    }
+}
+
+impl Swapper for Value {
+    fn swap(self, var: Variable, val: Value) -> Self {
+        match self {
+            Value::Expr(a) => Value::Expr(a.swap(var, val)),
+            Value::Bool(a) => Value::Bool(a.swap(var, val)),
+            Value::Variable(a) => {
+                if a == var {
+                    val
+                } else {
+                    Value::Variable(a)
+                }
+            }
+            Value::Tuple(vec) => {
+                let mut res = Vec::new();
+                for i in vec {
+                    res.push(i.swap(var.clone(), val.clone()));
+                }
+                Value::Tuple(res)
+            }
+            Value::Array(vec) => {
+                let mut res = Vec::new();
+                for i in vec {
+                    res.push(i.swap(var.clone(), val.clone()));
+                }
+                Value::Array(res)
+            }
+            Value::FunctionCall(name, vec) => {
+                let mut res = Vec::new();
+                for i in vec {
+                    res.push(i.swap(var.clone(), val.clone()));
+                }
+                Value::FunctionCall(name, res)
+            }
+            Value::Dereference(a) => Value::Dereference(Box::new(a.swap(var, val))),
+            Value::Reference(a) => Value::Reference(Box::new(a.swap(var, val))),
+            Value::ReferenceMutable(a) => Value::ReferenceMutable(Box::new(a.swap(var, val))),
+            Value::Unit => Value::Unit,
+            Value::Unknown => Value::Unknown,
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -922,6 +1003,31 @@ mod test {
                 Variable::Named(String::from("check")),
                 Variable::Named(String::from("x"))
             ]
+        );
+    }
+
+    #[test]
+    fn swap1() {
+        assert_eq!(
+            Bool::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                "x"
+            )))))
+            .swap(
+                Variable::Named(String::from("x")),
+                Value::Expr(Expr::Number(2))
+            ),
+            Bool::Value(Box::new(Value::Expr(Expr::Number(2))))
+        );
+    }
+
+    #[test]
+    fn swap2() {
+        assert_eq!(
+            Value::Variable(Variable::Named(String::from("x"))).swap(
+                Variable::Named(String::from("x")),
+                Value::Expr(Expr::Number(2))
+            ),
+            Value::Expr(Expr::Number(2))
         );
     }
 }
