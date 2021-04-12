@@ -63,93 +63,70 @@ pub fn prove(input: Program) -> bool {
         // do the same for next command, but use P as Q
 
         let mut q = Bool::True;
-        let mut p;
+        // Just an initializer
+        let mut p = Bool::True;
+        let mut prove_control = false;
+        // Assertion can not be treated as a separate command, as it breaks the implication chain.
+        // Its content should be added to the Q of the first command that's above it (it can not be an assertion?).
         for command in to_prove_vec {
-            // Get p based on the command
-            p = command.get_pre(q.clone());
-
-            let mut cfg = z3::Config::new();
-            cfg.set_model_generation(true);
-
-            let ctx = z3::Context::new(&cfg);
-            let t = z3::Solver::new(&ctx);
-
-            t.assert(&p.clone().as_bool(&ctx).implies(&q.as_bool(&ctx)));
-
-            let f = t.check();
-            log::debug!("{:?}", f);
-            log::debug!("{:?}", t.get_model());
-            let result = Some(f);
-
-            match result {
-                Some(z3::SatResult::Unsat) => {
-                    return false;
+            match command.clone() {
+                Command::ProveControl(x) => {
+                    prove_control = true;
+                    let a = match x {
+                        ProveControl::Assert(z) => z,
+                        ProveControl::Assume(z) => z,
+                        ProveControl::LoopInvariant(z) => z,
+                    };
+                    q = Bool::And(Box::new(q), Box::new(a));
                 }
-                Some(z3::SatResult::Sat) => {
-                    //log::info!("Proven: {}", command);
-                    log::info!("Model: {:?}", t.get_model());
+                z => {
+                    // Get p based on the command
+                    p = z.get_pre(q.clone());
+                    prove_control = false;
                 }
-                _ => {}
             }
 
-            q = p;
-        }
-        //let con = context::get_context_func(to_prove, input.clone());
-        //// Try to prove
-        ////println!("{:?}", con);
+            log::debug!("{} => [[{}]] => {}", p.clone(), command, q.clone());
 
-        //for frame in con {
-        //    log::debug!("{:?}", frame);
-        //    let sat = prove_frame(frame.clone());
-        //    match sat {
-        //        None => {}
-        //        Some(a) => {
-        //            // A counter example was found - our check failed
-        //            if a != z3::SatResult::Unsat {
-        //                println!("Failed to prove: {}", frame.command);
-        //                return false;
-        //            }
-        //        }
-        //    }
-        //}
+            if (!prove_control) {
+                let mut cfg = z3::Config::new();
+                cfg.set_model_generation(true);
+
+                let ctx = z3::Context::new(&cfg);
+                let t = z3::Solver::new(&ctx);
+
+                t.assert(
+                    &p.clone()
+                        .as_bool(&ctx)
+                        .implies(&q.clone().as_bool(&ctx))
+                        .not(),
+                );
+
+                let f = t.check();
+                log::debug!("{:?}", f);
+                log::debug!("{:?}", t.get_model());
+                let result = Some(f);
+
+                match result {
+                    Some(z3::SatResult::Sat) => {
+                        log::info!("Model: {:?}", t.get_model());
+                        return false;
+                    }
+                    Some(z3::SatResult::Unsat) => {
+                        log::info!("Proven: {}", command);
+                    }
+                    _ => {}
+                }
+            }
+
+            if (!prove_control) {
+                q = p.clone();
+            }
+        }
 
         log::info!("Successfully proved function: {}", f_name);
     }
 
-    //println!("START");
-    //// Idea:
-    //// declare constants for all identifiers that are there (variables)
-    //// use asserts to assign values
-    //// assert the assertion in the end
-    //// try to check it
-
-    //let mut cfg = z3::Config::new();
-    //cfg.set_model_generation(true);
-    ////let te: i32 = 20;
-    //let ctx = z3::Context::new(&cfg);
-    ////// TODO: use goal?
-    //////let t = z3::Goal::new(&ctx, true, false, false);
-    //////t.assert(&z3::ast::Ast());
-    //let t = z3::Solver::new(&ctx);
-    ////let b = z3::ast::Bool::new_const(&ctx, "b");
-    ////let c = z3::ast::Bool::new_const(&ctx, "c");
-    ////let d = z3::ast::Bool::new_const(&ctx, "d");
-    //let x = z3::ast::Int::new_const(&ctx, "x");
-    //let y = z3::ast::Int::new_const(&ctx, "y");
-    ////t.assert(&z3::ast::Bool::and(&ctx, &[&b, &c]));
-    ////t.assert(&z3::ast::Bool::and(&ctx, &[&c, &d]));
-    //t.assert(&x.gt(&y));
-    //let x = z3::ast::Int::new_const(&ctx, "x");
-    //t.assert(&x.gt(&z3::ast::Int::from_i64(&ctx, 123)));
-    //t.assert(&y.gt(&z3::ast::Int::from_i64(&ctx, 180)));
-    ////t.assert(&y.gt(&z3::ast::Int::from_i64(&ctx, te.into())));
-    //////t.assert(&z3::ast::Bool::not(&z3::ast::Bool::and(&ctx, &[&c, &d])));
-    //////t.assert(&z3::ast::Bool::from_bool(&ctx, c == d));
-    //let f = t.check();
-    //println!("{:?}", f);
-    //println!("{:?}", t.get_model());
-    //////println!("{:?}", t.get_proof());
-    //println!("DONE");
     true
 }
 
@@ -162,10 +139,10 @@ impl Provable for Command {
     fn get_pre(self, q: Bool) -> Bool {
         match self {
             Command::Binding(x) => x.get_pre(q),
-            Command::Assignment(x) => unimplemented!(),
+            Command::Assignment(x) => x.get_pre(q),
             Command::ProveControl(x) => x.get_pre(q),
             Command::Block(x) => unimplemented!(),
-            Command::Noop => Bool::True,
+            Command::Noop => q,
         }
     }
 }
@@ -186,6 +163,21 @@ impl Provable for Binding {
     }
 }
 
+impl Provable for Assignment {
+    fn get_pre(self, q: Bool) -> Bool {
+        match self {
+            Assignment::Tuple(vec) => {
+                let mut t = q;
+                for i in vec {
+                    t = i.get_pre(t);
+                }
+                t
+            }
+            Assignment::Single(var, val) => q.swap(var, val),
+        }
+    }
+}
+
 impl Provable for ProveControl {
     fn get_pre(self, q: Bool) -> Bool {
         match self {
@@ -193,180 +185,6 @@ impl Provable for ProveControl {
             ProveControl::Assume(a) => a,
             ProveControl::LoopInvariant(a) => a,
         }
-    }
-}
-
-fn prove_frame(frame: context::Frame) -> Option<z3::SatResult> {
-    let mut cfg = z3::Config::new();
-    cfg.set_model_generation(true);
-
-    let ctx = z3::Context::new(&cfg);
-    let t = z3::Solver::new(&ctx);
-    let needed = _prove_frame(frame.clone(), &ctx, &t);
-    let result;
-    if needed {
-        let f = t.check();
-        log::debug!("{}", frame.command);
-        log::debug!("{:?}", f);
-        log::debug!("{:?}", t.get_model());
-        result = Some(f);
-        match result {
-            Some(z3::SatResult::Sat) => {
-                log::info!("Model: {:?}", t.get_model());
-            }
-            Some(z3::SatResult::Unsat) => {
-                log::info!("Proven: {}", frame.command);
-            }
-            _ => {}
-        }
-    } else {
-        //println!("Nothing to prove!");
-        result = None;
-    }
-    result
-}
-
-fn _prove_frame(frame: context::Frame, ctx: &z3::Context, sol: &z3::Solver) -> bool {
-    // convert to Z3 problem and run it
-    // for all the variables that we have, define them and assert their value
-    //let mut vars_int = HashMap::new();
-    let vars = frame.vars.clone();
-    for context::Var { n, t, v } in vars {
-        add_variable(n, t, v, ctx, sol);
-        // TODO: the add_variable should also handle setting the correct value based on input type
-        // TODO: assign proper val
-        // so we need to be able to convert value into z3 int/bool
-        //let val = 1;
-        //sol.assert(&var.ge(&z3::ast::Int::from_i64(&ctx, val)));
-        //sol.assert(&var.le(&z3::ast::Int::from_i64(&ctx, val)));
-        //vars_int.insert(name, var);
-    }
-
-    for assume in frame.assumes {
-        log::debug!("Assume: {}", assume);
-        sol.assert(&assume.as_bool(ctx));
-    }
-
-    // TODO: run the assertion to provea
-    // so we need to be able to convert bool into z3 bool
-    let to_prove = frame.command;
-    let (needed, to_prove_z3) = to_prove.as_bool(ctx);
-    sol.assert(&to_prove_z3);
-    needed
-}
-
-fn add_variable(var: Variable, t: Type, v: Value, ctx: &z3::Context, sol: &z3::Solver) {
-    let unknown = match v.clone() {
-        Value::Unknown => true,
-        _ => false,
-    };
-    // TODO: check if this covers all the AST entries
-    log::debug!("SET: {} = {:?}", var.clone(), v.clone());
-    match t {
-        Type::I32 => match var.clone() {
-            Variable::Named(name) => {
-                if unknown {
-                    z3::ast::Int::new_const(ctx, name);
-                } else {
-                    sol.assert(
-                        &Bool::Equal(
-                            Expr::Value(Box::new(Value::Variable(var))),
-                            Expr::Value(Box::new(v)),
-                        )
-                        .as_bool(ctx),
-                    );
-                }
-            }
-            Variable::ArrayElem(arr_name, index) => {
-                // TODO: define indices properly, don't allow ALL the values
-                // should we even define this array here instead of in the Type:Array?
-                let t = z3::ast::Array::new_const(
-                    ctx,
-                    arr_name.clone(),
-                    &z3::Sort::int(ctx),
-                    &z3::Sort::int(ctx),
-                );
-
-                if unknown {
-                } else {
-                    let t = sol.assert(
-                        &Bool::Equal(
-                            Expr::Value(Box::new(Value::Variable(Variable::ArrayElem(
-                                arr_name.clone(),
-                                index,
-                            )))),
-                            Expr::Value(Box::new(v)),
-                        )
-                        .as_bool(ctx),
-                    );
-                }
-            }
-
-            _ => unimplemented!(),
-        },
-        Type::Bool => match var.clone() {
-            // Use smart boolean operations to assign the newly created z3 variable same value that's assigned in the code
-            Variable::Named(name) => {
-                if unknown {
-                    z3::ast::Bool::new_const(ctx, name);
-                } else {
-                    sol.assert(&z3::ast::Bool::or(
-                        ctx,
-                        &[&z3::ast::Bool::and(
-                            ctx,
-                            &[&z3::ast::Bool::new_const(ctx, name), &v.as_bool(ctx)],
-                        )],
-                    ));
-                }
-            }
-            _ => unimplemented!(),
-        },
-        Type::Array(ty, _) => match var.clone() {
-            Variable::Named(arr_name) => {
-                let t = z3::ast::Array::new_const(
-                    ctx,
-                    arr_name.clone(),
-                    &z3::Sort::int(ctx),
-                    &z3::Sort::int(ctx),
-                );
-
-                if unknown {
-                } else {
-                    // Correctly assign specific values
-                    match v {
-                        Value::Array(a) => {
-                            let mut i = 0;
-                            for va in a {
-                                match *ty {
-                                    Type::I32 => sol.assert(
-                                        &Bool::Equal(
-                                            Expr::Value(Box::new(Value::Variable(
-                                                Variable::ArrayElem(
-                                                    arr_name.clone(),
-                                                    Box::new(Value::Expr(Expr::Number(i))),
-                                                ),
-                                            ))),
-                                            Expr::Value(Box::new(va)),
-                                        )
-                                        .as_bool(ctx),
-                                    ),
-                                    Type::Bool => {
-                                        // TODO: base on the work above, but we don't have Equals implemented for Bool at the moment
-                                    }
-                                    // Tuple and array types do not have to be covered, however references have to
-                                    _ => unimplemented!(),
-                                }
-                                i += 1;
-                            }
-                        }
-                        _ => unimplemented!(),
-                    }
-                }
-            }
-            _ => unimplemented!(),
-        },
-
-        _ => unimplemented!(),
     }
 }
 
@@ -536,83 +354,4 @@ impl ProvableCommand for Command {
 #[cfg(test)]
 mod test {
     use super::*;
-
-    #[test]
-    fn prove_frame1() {
-        let com = Command::ProveControl(ProveControl::Assert(Bool::True));
-        let frame = context::Frame {
-            command: com,
-            funcs: Vec::new(),
-            vals: Vec::new(),
-            vars: Vec::new(),
-            assumes: Vec::new(),
-        };
-
-        assert_eq!(prove_frame(frame), Some(z3::SatResult::Unsat));
-    }
-
-    #[test]
-    fn prove_frame2() {
-        let com = Command::ProveControl(ProveControl::Assert(Bool::False));
-        let frame = context::Frame {
-            command: com,
-            funcs: Vec::new(),
-            vals: Vec::new(),
-            vars: Vec::new(),
-            assumes: Vec::new(),
-        };
-
-        assert_eq!(prove_frame(frame), Some(z3::SatResult::Sat));
-    }
-
-    #[test]
-    fn prove_frame3() {
-        let com = Command::ProveControl(ProveControl::Assert(Bool::And(
-            Box::new(Bool::True),
-            Box::new(Bool::True),
-        )));
-        let frame = context::Frame {
-            command: com,
-            funcs: Vec::new(),
-            vals: Vec::new(),
-            vars: Vec::new(),
-            assumes: Vec::new(),
-        };
-
-        assert_eq!(prove_frame(frame), Some(z3::SatResult::Unsat));
-    }
-
-    #[test]
-    fn prove_frame4() {
-        let com = Command::ProveControl(ProveControl::Assert(Bool::And(
-            Box::new(Bool::True),
-            Box::new(Bool::False),
-        )));
-        let frame = context::Frame {
-            command: com,
-            funcs: Vec::new(),
-            vals: Vec::new(),
-            vars: Vec::new(),
-            assumes: Vec::new(),
-        };
-
-        assert_eq!(prove_frame(frame), Some(z3::SatResult::Sat));
-    }
-
-    #[test]
-    fn prove_frame5() {
-        let com = Command::ProveControl(ProveControl::Assert(Bool::Or(
-            Box::new(Bool::True),
-            Box::new(Bool::False),
-        )));
-        let frame = context::Frame {
-            command: com,
-            funcs: Vec::new(),
-            vals: Vec::new(),
-            vars: Vec::new(),
-            assumes: Vec::new(),
-        };
-
-        assert_eq!(prove_frame(frame), Some(z3::SatResult::Unsat));
-    }
 }

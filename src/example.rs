@@ -1,6 +1,9 @@
 fn easy() {
-    let a: i32 = 12;
+    let mut a: i32 = 12;
     //%assert a == 12
+
+    a = 123;
+    //% assert a == 123
 }
 
 fn main() {
