@@ -23,6 +23,9 @@ pub fn prove(input: Program) -> bool {
             Command::ProveControl(ProveControl::Assume(func.precondition)),
         );
 
+        // Set the noop as first, so the generation below works fine
+        temp.insert(0, Command::Noop);
+
         // TODO: uncomment when tuple type is handled in add_variable
         //if func.output.clone() != Type::Unit {
         //    temp.push(Command::Binding(Binding::Assignment(
@@ -38,10 +41,14 @@ pub fn prove(input: Program) -> bool {
             func.postcondition.clone(),
         )));
 
+        // Put the noop at the end so loops are in bounds, should be cleaned up in the end, similar to the push of noop above
+        temp.push(Command::Noop);
+
         to_prove.content = temp.clone();
 
         let mut to_prove_vec = Vec::new();
 
+        // Invert the array for generation
         let mut check = true;
         while check {
             let t = temp.pop();
@@ -62,65 +69,94 @@ pub fn prove(input: Program) -> bool {
         // check if this implies?
         // do the same for next command, but use P as Q
 
+        // first generate the list of stuff to prove
+        // then in another loop, run the actual proving
+
+        let mut to_prove_vec_temp = Vec::new();
+
+        let mut assertions_to_unpack = Vec::new();
         let mut q = Bool::True;
         // Just an initializer
         let mut p = Bool::True;
-        let mut prove_control = false;
         // Assertion can not be treated as a separate command, as it breaks the implication chain.
         // Its content should be added to the Q of the first command that's above it (it can not be an assertion?).
         for command in to_prove_vec {
+            log::debug!("{:?}", command);
             match command.clone() {
                 Command::ProveControl(x) => {
-                    prove_control = true;
                     let a = match x {
                         ProveControl::Assert(z) => z,
                         ProveControl::Assume(z) => z,
                         ProveControl::LoopInvariant(z) => z,
                     };
-                    q = Bool::And(Box::new(q), Box::new(a));
+
+                    assertions_to_unpack.push(a);
+                    //let (mut p, mut command, mut q) = to_prove_vec_temp.pop().unwrap();
+                    //q = Bool::And(Box::new(q), Box::new(a));
+                    //to_prove_vec_temp.push((p, command, q));
                 }
                 z => {
                     // Get p based on the command
                     p = z.get_pre(q.clone());
-                    prove_control = false;
+
+                    // Check the assertions, if something has to be added
+                    if !assertions_to_unpack.is_empty() {
+                        q = Bool::And(Box::new(q), Box::new(assertions_to_unpack.pop().unwrap()));
+                    }
+
+                    to_prove_vec_temp.push((p.clone(), command, q.clone()));
+                    q = p.clone();
                 }
             }
+            log::debug!("{:?}", to_prove_vec_temp);
+        }
 
+        let mut to_prove_vec_final = Vec::new();
+        // Invert array again for proving (style points)
+        let mut check = true;
+        while check {
+            let t = to_prove_vec_temp.pop();
+            match t {
+                Some(x) => {
+                    to_prove_vec_final.push(x);
+                }
+                None => {
+                    check = false;
+                }
+            }
+        }
+
+        log::debug!("{:?}", to_prove_vec_final);
+        for (p, command, q) in to_prove_vec_final {
             log::debug!("{} => [[{}]] => {}", p.clone(), command, q.clone());
 
-            if (!prove_control) {
-                let mut cfg = z3::Config::new();
-                cfg.set_model_generation(true);
+            let mut cfg = z3::Config::new();
+            cfg.set_model_generation(true);
 
-                let ctx = z3::Context::new(&cfg);
-                let t = z3::Solver::new(&ctx);
+            let ctx = z3::Context::new(&cfg);
+            let t = z3::Solver::new(&ctx);
 
-                t.assert(
-                    &p.clone()
-                        .as_bool(&ctx)
-                        .implies(&q.clone().as_bool(&ctx))
-                        .not(),
-                );
+            t.assert(
+                &p.clone()
+                    .as_bool(&ctx)
+                    .implies(&q.clone().as_bool(&ctx))
+                    .not(),
+            );
 
-                let f = t.check();
-                log::debug!("{:?}", f);
-                log::debug!("{:?}", t.get_model());
-                let result = Some(f);
+            let f = t.check();
+            log::debug!("{:?}", f);
+            log::debug!("{:?}", t.get_model());
+            let result = Some(f);
 
-                match result {
-                    Some(z3::SatResult::Sat) => {
-                        log::info!("Model: {:?}", t.get_model());
-                        return false;
-                    }
-                    Some(z3::SatResult::Unsat) => {
-                        log::info!("Proven: {}", command);
-                    }
-                    _ => {}
+            match result {
+                Some(z3::SatResult::Sat) => {
+                    log::info!("Model: {:?}", t.get_model());
+                    return false;
                 }
-            }
-
-            if (!prove_control) {
-                q = p.clone();
+                Some(z3::SatResult::Unsat) => {
+                    log::info!("Proven: {}", command);
+                }
+                _ => {}
             }
         }
 
@@ -354,4 +390,125 @@ impl ProvableCommand for Command {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn prove_empty1() {
+        assert!(prove(Program {
+            content: vec![Function {
+                name: String::from("test"),
+                content: vec![],
+                input: vec![],
+                output: Type::Unit,
+                precondition: Bool::True,
+                postcondition: Bool::True,
+                return_value: Value::Unit
+            }]
+        }));
+    }
+
+    #[test]
+    fn prove_1() {
+        assert!(prove(Program {
+            content: vec![Function {
+                name: String::from("test"),
+                content: vec![
+                    Command::Binding(Binding::Assignment(
+                        Variable::Named(String::from("x")),
+                        Type::I32,
+                        Value::Expr(Expr::Number(1)),
+                        false
+                    )),
+                    Command::ProveControl(ProveControl::Assert(Bool::Equal(
+                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                            "x"
+                        ))))),
+                        Expr::Number(1)
+                    )))
+                ],
+                input: vec![],
+                output: Type::Unit,
+                precondition: Bool::True,
+                postcondition: Bool::True,
+                return_value: Value::Unit
+            }]
+        }));
+    }
+
+    #[test]
+    fn prove_fail_1() {
+        assert!(!prove(Program {
+            content: vec![Function {
+                name: String::from("test"),
+                content: vec![
+                    Command::Binding(Binding::Assignment(
+                        Variable::Named(String::from("x")),
+                        Type::I32,
+                        Value::Expr(Expr::Number(1)),
+                        false
+                    )),
+                    Command::ProveControl(ProveControl::Assert(Bool::Equal(
+                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                            "x"
+                        ))))),
+                        Expr::Number(2)
+                    )))
+                ],
+                input: vec![],
+                output: Type::Unit,
+                precondition: Bool::True,
+                postcondition: Bool::True,
+                return_value: Value::Unit
+            }]
+        }));
+    }
+
+    #[test]
+    fn prove_postcondition1() {
+        assert!(prove(Program {
+            content: vec![Function {
+                name: String::from("test"),
+                content: vec![Command::Binding(Binding::Assignment(
+                    Variable::Named(String::from("x")),
+                    Type::I32,
+                    Value::Expr(Expr::Number(1)),
+                    false
+                ))],
+                input: vec![],
+                output: Type::Unit,
+                precondition: Bool::True,
+                postcondition: Bool::Equal(
+                    Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                        "x"
+                    ))))),
+                    Expr::Number(1)
+                ),
+                return_value: Value::Unit
+            }]
+        }));
+    }
+
+    #[test]
+    fn prove_postcondition_fail1() {
+        assert!(prove(Program {
+            content: vec![Function {
+                name: String::from("test"),
+                content: vec![Command::Binding(Binding::Assignment(
+                    Variable::Named(String::from("x")),
+                    Type::I32,
+                    Value::Expr(Expr::Number(1)),
+                    false
+                ))],
+                input: vec![],
+                output: Type::Unit,
+                precondition: Bool::True,
+                postcondition: Bool::Equal(
+                    Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                        "x"
+                    ))))),
+                    Expr::Number(2)
+                ),
+                return_value: Value::Unit
+            }]
+        }));
+    }
 }
