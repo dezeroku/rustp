@@ -92,6 +92,7 @@ fn factor_not(input: &str) -> IResult<&str, Box<ast::Bool>> {
 fn factor_compare(input: &str) -> IResult<&str, Box<ast::Bool>> {
     alt((
         factor_compare_equal,
+        factor_compare_not_equal,
         factor_compare_greater_equal,
         factor_compare_greater,
         factor_compare_smaller_equal,
@@ -104,6 +105,18 @@ fn factor_compare_equal(input: &str) -> IResult<&str, Box<ast::Bool>> {
         |(next_input, res)| {
             let (a, _, _, _, b) = res;
             Ok((next_input, Box::new(ast::Bool::Equal(*a, *b))))
+        },
+    )
+}
+
+fn factor_compare_not_equal(input: &str) -> IResult<&str, Box<ast::Bool>> {
+    tuple((math::expr, space0, tag("!="), space0, math::expr))(input).and_then(
+        |(next_input, res)| {
+            let (a, _, _, _, b) = res;
+            Ok((
+                next_input,
+                Box::new(ast::Bool::Not(Box::new(ast::Bool::Equal(*a, *b)))),
+            ))
         },
     )
 }
@@ -257,6 +270,33 @@ mod test {
                         Box::new(ast::Expr::Number(3))
                     )
                 ))
+        );
+    }
+
+    #[test]
+    fn factor_compare_not_equal1() {
+        assert!(
+            factor_compare_not_equal("12 != 43").unwrap().1
+                == Box::new(ast::Bool::Not(Box::new(ast::Bool::Equal(
+                    ast::Expr::Number(12),
+                    ast::Expr::Number(43)
+                ))))
+        );
+
+        assert!(
+            factor_compare_not_equal("a != (b + 3)").unwrap().1
+                == Box::new(ast::Bool::Not(Box::new(ast::Bool::Equal(
+                    ast::Expr::Value(Box::new(ast::Value::Variable(ast::Variable::Named(
+                        "a".to_string()
+                    )))),
+                    ast::Expr::Op(
+                        Box::new(ast::Expr::Value(Box::new(ast::Value::Variable(
+                            ast::Variable::Named("b".to_string())
+                        )))),
+                        ast::Opcode::Add,
+                        Box::new(ast::Expr::Number(3))
+                    )
+                ))))
         );
     }
 

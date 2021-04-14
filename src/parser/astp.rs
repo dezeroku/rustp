@@ -226,12 +226,14 @@ fn debug_comment(input: &str) -> IResult<&str, &str> {
 
 fn single_comment(input: &str) -> IResult<&str, &str> {
     not(command)(input).and_then(|(next_input, _)| {
-        tuple((tag("//"), take_while_not_newline, opt(newline)))(next_input).and_then(
-            |(next_input, res)| {
-                let (_, c, _) = res;
-                Ok((next_input, c))
-            },
-        )
+        not(prove_start)(input).and_then(|(next_input, _)| {
+            tuple((tag("//"), take_while_not_newline, opt(newline)))(next_input).and_then(
+                |(next_input, res)| {
+                    let (_, c, _) = res;
+                    Ok((next_input, c))
+                },
+            )
+        })
     })
 }
 
