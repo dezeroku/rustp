@@ -18,12 +18,12 @@ pub fn prove(input: Program) -> bool {
         let mut temp = func.content.clone();
 
         // Set precondition as first assume
-        temp.insert(
-            0,
-            Command::ProveControl(ProveControl::Assume(func.precondition)),
-        );
+        //temp.insert(
+        //    0,
+        //    Command::ProveControl(ProveControl::Assume(func.precondition)),
+        //);
 
-        // Set the noop as first, so the generation below works fine
+        // Set the noop as first, so the generation below works fine, even if assertion is first in the code
         temp.insert(0, Command::Noop);
 
         // TODO: uncomment when tuple type is handled in add_variable
@@ -36,31 +36,36 @@ pub fn prove(input: Program) -> bool {
         //    )));
         //}
 
+        // Put the noop at the end so loops are in bounds, should be cleaned up in the end, similar to the push of noop above
+        temp.push(Command::Noop);
+
         // Set postcondition as last assert
         temp.push(Command::ProveControl(ProveControl::Assert(
             func.postcondition.clone(),
         )));
 
-        // Put the noop at the end so loops are in bounds, should be cleaned up in the end, similar to the push of noop above
-        temp.push(Command::Noop);
-
         to_prove.content = temp.clone();
+        log::debug!("START TO PROVE COMMAND LIST:");
+        for i in temp.clone() {
+            log::debug!("{:?}", i);
+        }
+        log::debug!("END TO PROVE COMMAND LIST:");
 
-        let mut to_prove_vec = Vec::new();
+        let mut to_prove_vec = temp;
 
         // Invert the array for generation
-        let mut check = true;
-        while check {
-            let t = temp.pop();
-            match t {
-                Some(x) => {
-                    to_prove_vec.push(x);
-                }
-                None => {
-                    check = false;
-                }
-            }
-        }
+        //let mut check = true;
+        //while check {
+        //    let t = temp.pop();
+        //    match t {
+        //        Some(x) => {
+        //            to_prove_vec.push(x);
+        //        }
+        //        None => {
+        //            check = false;
+        //        }
+        //    }
+        //}
         // TODO:
         // The whole function is {P} S {Q} (precondtion, code, postcondition)
 
@@ -74,12 +79,14 @@ pub fn prove(input: Program) -> bool {
 
         let mut to_prove_vec_temp = Vec::new();
 
-        let mut assertions_to_unpack = Vec::new();
-        let mut q = Bool::True;
+        // Create a list of small contexts, that would be {precondition} bunch of code {assertion}
+
+        let precondition = to_prove.precondition;
+        let mut code_till_now = Vec::new();
+        //let mut q = Bool::True;
         // Just an initializer
-        let mut p = Bool::True;
-        // Assertion can not be treated as a separate command, as it breaks the implication chain.
-        // Its content should be added to the Q of the first command that's above it (it can not be an assertion?).
+        //let mut p = Bool::True;
+
         for command in to_prove_vec {
             log::debug!("{:?}", command);
             match command.clone() {
@@ -90,32 +97,57 @@ pub fn prove(input: Program) -> bool {
                         ProveControl::LoopInvariant(z) => z,
                     };
 
-                    assertions_to_unpack.push(a);
+                    // Is this really needed or does it make the context look worse?
+                    code_till_now.push(command.clone());
+                    to_prove_vec_temp.push((precondition.clone(), code_till_now.clone(), a));
                     //let (mut p, mut command, mut q) = to_prove_vec_temp.pop().unwrap();
                     //q = Bool::And(Box::new(q), Box::new(a));
                     //to_prove_vec_temp.push((p, command, q));
                 }
                 z => {
+                    // Check the assertions, if something has to be added to current "real command" q
+
+                    code_till_now.push(z);
                     // Get p based on the command
-                    p = z.get_pre(q.clone());
+                    //p = z.get_pre(q.clone());
 
-                    // Check the assertions, if something has to be added
-                    if !assertions_to_unpack.is_empty() {
-                        q = Bool::And(Box::new(q), Box::new(assertions_to_unpack.pop().unwrap()));
-                    }
-
-                    to_prove_vec_temp.push((p.clone(), command, q.clone()));
-                    q = p.clone();
+                    //to_prove_vec_temp.push((p.clone(), command, q.clone()));
+                    //q = p.clone();
                 }
             }
             log::debug!("{:?}", to_prove_vec_temp);
         }
+        // Remember the p of first command to check if precondition implies it later on.
+        //let p_n = p;
+
+        // Work through to_prove_vec_temp and calculate the final posts based on the code
+
+        let mut to_prove_vec_temp_calculated = Vec::new();
+
+        // TODO: Consider also listing the original post, to make user output easier
+        for (p, comms, mut q) in to_prove_vec_temp {
+            // Should we ignore assertions here? These may do strange stuff to the q
+            // and are already processed individually
+            log::trace!("{}", q);
+            for comm in comms.clone() {
+                match comm.clone() {
+                    Command::ProveControl(_) => {}
+                    _ => {
+                        log::trace!("{}", comm.clone());
+                        q = comm.get_pre(q.clone());
+                        log::trace!("{}", q);
+                    }
+                }
+            }
+
+            to_prove_vec_temp_calculated.push((p, comms, q));
+        }
 
         let mut to_prove_vec_final = Vec::new();
-        // Invert array again for proving (style points)
+        // Invert array for proving
         let mut check = true;
         while check {
-            let t = to_prove_vec_temp.pop();
+            let t = to_prove_vec_temp_calculated.pop();
             match t {
                 Some(x) => {
                     to_prove_vec_final.push(x);
@@ -126,9 +158,16 @@ pub fn prove(input: Program) -> bool {
             }
         }
 
-        log::debug!("{:?}", to_prove_vec_final);
+        log::debug!("START TO PROVE FINAL LIST:");
+        for i in to_prove_vec_final.clone() {
+            log::debug!("{:?}", i);
+        }
+        log::debug!("END TO PROVE FINAL LIST:");
+
+        //to_prove_vec_final.push((to_prove.precondition, Command::Noop, p_n));
+
         for (p, command, q) in to_prove_vec_final {
-            log::debug!("{} => [[{}]] => {}", p.clone(), command, q.clone());
+            log::debug!("{} => [[{:?}]] => {}", p.clone(), command, q.clone());
 
             let mut cfg = z3::Config::new();
             cfg.set_model_generation(true);
@@ -154,7 +193,7 @@ pub fn prove(input: Program) -> bool {
                     return false;
                 }
                 Some(z3::SatResult::Unsat) => {
-                    log::info!("Proven: {}", command);
+                    log::info!("Proven: {:?}", command);
                 }
                 _ => {}
             }
