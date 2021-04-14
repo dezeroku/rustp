@@ -125,9 +125,24 @@ pub fn prove(input: Program) -> bool {
         let mut to_prove_vec_temp_calculated = Vec::new();
 
         // TODO: Consider also listing the original post, to make user output easier
-        for (p, comms, mut q) in to_prove_vec_temp {
-            // Should we ignore assertions here? These may do strange stuff to the q
-            // and are already processed individually
+        for (p, mut _comms, mut q) in to_prove_vec_temp {
+            let mut comms = Vec::new();
+            // Invert array for proving
+            let mut check = true;
+            while check {
+                let t = _comms.pop();
+                match t {
+                    Some(x) => {
+                        comms.push(x);
+                    }
+                    None => {
+                        check = false;
+                    }
+                }
+            }
+
+            // Invert vector here, for proper postcondition expansion
+
             log::trace!("{}", q);
             for comm in comms.clone() {
                 match comm.clone() {
@@ -463,6 +478,116 @@ mod test {
                         ))))),
                         Expr::Number(1)
                     )))
+                ],
+                input: vec![],
+                output: Type::Unit,
+                precondition: Bool::True,
+                postcondition: Bool::True,
+                return_value: Value::Unit
+            }]
+        }));
+    }
+
+    #[test]
+    fn prove_2() {
+        assert!(prove(Program {
+            content: vec![Function {
+                name: String::from("test"),
+                content: vec![
+                    Command::Binding(Binding::Assignment(
+                        Variable::Named(String::from("x")),
+                        Type::I32,
+                        Value::Expr(Expr::Number(1)),
+                        false
+                    )),
+                    Command::ProveControl(ProveControl::Assert(Bool::Equal(
+                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                            "x"
+                        ))))),
+                        Expr::Number(1)
+                    ))),
+                    Command::Binding(Binding::Assignment(
+                        Variable::Named(String::from("x")),
+                        Type::I32,
+                        Value::Expr(Expr::Number(2)),
+                        false
+                    )),
+                    Command::ProveControl(ProveControl::Assert(Bool::Equal(
+                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                            "x"
+                        ))))),
+                        Expr::Number(2)
+                    )))
+                ],
+                input: vec![],
+                output: Type::Unit,
+                precondition: Bool::True,
+                postcondition: Bool::True,
+                return_value: Value::Unit
+            }]
+        }));
+    }
+
+    #[test]
+    fn prove_3() {
+        assert!(prove(Program {
+            content: vec![Function {
+                name: String::from("test"),
+                content: vec![
+                    Command::Binding(Binding::Assignment(
+                        Variable::Named(String::from("x")),
+                        Type::I32,
+                        Value::Expr(Expr::Number(1)),
+                        false
+                    )),
+                    Command::ProveControl(ProveControl::Assert(Bool::Equal(
+                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                            "x"
+                        ))))),
+                        Expr::Number(1)
+                    ))),
+                    Command::Binding(Binding::Assignment(
+                        Variable::Named(String::from("x")),
+                        Type::I32,
+                        Value::Expr(Expr::Number(2)),
+                        false
+                    )),
+                    Command::ProveControl(ProveControl::Assert(Bool::Equal(
+                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                            "x"
+                        ))))),
+                        Expr::Number(2)
+                    ))),
+                    Command::Binding(Binding::Assignment(
+                        Variable::Named(String::from("x")),
+                        Type::I32,
+                        Value::Expr(Expr::Op(
+                            Box::new(Expr::Value(Box::new(Value::Variable(Variable::Named(
+                                String::from("x")
+                            ))))),
+                            Opcode::Add,
+                            Box::new(Expr::Number(3))
+                        )),
+                        false
+                    )),
+                    Command::ProveControl(ProveControl::Assert(Bool::Equal(
+                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                            "x"
+                        ))))),
+                        Expr::Number(5)
+                    ))),
+                    Command::Binding(Binding::Assignment(
+                        Variable::Named(String::from("x")),
+                        Type::I32,
+                        Value::Expr(Expr::Number(7)),
+                        false
+                    )),
+                    Command::ProveControl(ProveControl::Assert(Bool::Equal(
+                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                            "x"
+                        ))))),
+                        Expr::Number(7)
+                    ))),
                 ],
                 input: vec![],
                 output: Type::Unit,
