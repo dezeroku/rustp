@@ -66,7 +66,7 @@ fn parse(filename: &str) -> ast::Program {
     }
 }
 
-fn setup_logging(level: i32) {
+fn setup_logging(level: i32, z3_debug: bool) {
     let s = match level {
         0 => log::LevelFilter::Off,
         1 => log::LevelFilter::Error,
@@ -78,14 +78,14 @@ fn setup_logging(level: i32) {
     };
     let mut b = Builder::new();
     b.filter_level(s);
-    if level < 5 {
+    if !z3_debug {
         b.filter(Some("z3"), log::LevelFilter::Info);
     }
     b.init();
     log::info!("Debug level: {}", s);
 }
 
-fn args() -> (String, i32) {
+fn args() -> (String, i32, bool) {
     let matches = App::new("rustp")
         .version("1.0")
         .author("d0ku <darthtyranus666666@gmail.com>")
@@ -103,6 +103,12 @@ fn args() -> (String, i32) {
                 .takes_value(false)
                 .about("Sets the level of verbosity"),
         )
+        .arg(
+            Arg::new("z3-debug")
+                .long("z3-debug")
+                .takes_value(false)
+                .about("Sets Z3 module logging verbosity to DEBUG"),
+        )
         .get_matches();
 
     let filename = matches.value_of("INPUT").unwrap().to_string();
@@ -117,7 +123,9 @@ fn args() -> (String, i32) {
         6 | _ => 6,
     };
 
-    (filename, verbosity)
+    let z3_debug = matches.is_present("z3-debug");
+
+    (filename, verbosity, z3_debug)
 }
 
 fn validate(input: ast::Program) {
@@ -141,10 +149,10 @@ fn main() {
     #[cfg(debug_assertions)]
     println!("Running a DEBUG version");
 
-    let (_filename, verbosity) = args();
+    let (_filename, verbosity, z3_debug) = args();
     let filename = &_filename.as_str();
 
-    setup_logging(verbosity);
+    setup_logging(verbosity, z3_debug);
 
     log::info!("Checking file: {}", filename);
 
