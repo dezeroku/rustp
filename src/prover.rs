@@ -24,27 +24,20 @@ pub fn prove(input: Program, funcs_to_prove: Vec<String>) -> bool {
 
         let mut temp = func.content.clone();
 
-        // Set precondition as first assume
-        //temp.insert(
-        //    0,
-        //    Command::ProveControl(ProveControl::Assume(func.precondition)),
-        //);
-
         // Set the noop as first, so the generation below works fine, even if assertion is first in the code
         temp.insert(0, Command::Noop);
 
-        // TODO: uncomment when tuple type is handled in add_variable
-        //if func.output.clone() != Type::Unit {
-        //    temp.push(Command::Binding(Binding::Assignment(
-        //        Variable::Named(String::from("return_value")),
-        //        func.output.clone(),
-        //        func.return_value.clone(),
-        //        false,
-        //    )));
-        //}
-
         // Put the noop at the end so loops are in bounds, should be cleaned up in the end, similar to the push of noop above
         temp.push(Command::Noop);
+
+        // TODO: Handle other return types
+        // Assign the value being returned to the ret'val variable
+        temp.push(Command::Binding(Binding::Assignment(
+            Variable::Named(String::from("return_value")),
+            func.output,
+            func.return_value,
+            false,
+        )));
 
         // Set postcondition as last assert
         temp.push(Command::ProveControl(ProveControl::Assert(
@@ -59,30 +52,6 @@ pub fn prove(input: Program, funcs_to_prove: Vec<String>) -> bool {
         log::debug!("END TO PROVE COMMAND LIST:");
 
         let mut to_prove_vec = temp;
-
-        // Invert the array for generation
-        //let mut check = true;
-        //while check {
-        //    let t = temp.pop();
-        //    match t {
-        //        Some(x) => {
-        //            to_prove_vec.push(x);
-        //        }
-        //        None => {
-        //            check = false;
-        //        }
-        //    }
-        //}
-        // TODO:
-        // The whole function is {P} S {Q} (precondtion, code, postcondition)
-
-        // for command in list of commands backwards:
-        // get the P and Q for the command
-        // check if this implies?
-        // do the same for next command, but use P as Q
-
-        // first generate the list of stuff to prove
-        // then in another loop, run the actual proving
 
         let mut to_prove_vec_temp = Vec::new();
 
