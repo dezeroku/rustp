@@ -85,7 +85,7 @@ fn setup_logging(level: i32, z3_debug: bool) {
     log::info!("Debug level: {}", s);
 }
 
-fn args() -> (String, i32, bool) {
+fn args() -> (String, i32, bool, Vec<String>) {
     let matches = App::new("rustp")
         .version("1.0")
         .author("d0ku <darthtyranus666666@gmail.com>")
@@ -109,6 +109,14 @@ fn args() -> (String, i32, bool) {
                 .takes_value(false)
                 .about("Sets Z3 module logging verbosity to DEBUG"),
         )
+        .arg(
+            Arg::new("function")
+                .about("the function to prove (does not check for the existence)")
+                .takes_value(true)
+                .short('f')
+                .long("function")
+                .multiple(true),
+        )
         .get_matches();
 
     let filename = matches.value_of("INPUT").unwrap().to_string();
@@ -125,7 +133,13 @@ fn args() -> (String, i32, bool) {
 
     let z3_debug = matches.is_present("z3-debug");
 
-    (filename, verbosity, z3_debug)
+    let mut functions = Vec::new();
+    if let Some(to_prove) = matches.values_of("function") {
+        for f in to_prove {
+            functions.push(f.to_string());
+        }
+    }
+    (filename, verbosity, z3_debug, functions)
 }
 
 fn validate(input: ast::Program) {
@@ -136,8 +150,8 @@ fn validate(input: ast::Program) {
     }
 }
 
-fn prove(input: ast::Program) {
-    let proved = prover::prove(input);
+fn prove(input: ast::Program, list: Vec<String>) {
+    let proved = prover::prove(input, list);
     if !proved {
         println!("Failed to prove!");
         std::process::exit(5);
@@ -149,7 +163,7 @@ fn main() {
     #[cfg(debug_assertions)]
     println!("Running a DEBUG version");
 
-    let (_filename, verbosity, z3_debug) = args();
+    let (_filename, verbosity, z3_debug, functions) = args();
     let filename = &_filename.as_str();
 
     setup_logging(verbosity, z3_debug);
@@ -162,6 +176,6 @@ fn main() {
     let simplified = simplifier::simplify(tree);
 
     validate(simplified.clone());
-    prove(simplified.clone());
+    prove(simplified.clone(), functions);
     println!();
 }

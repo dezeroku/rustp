@@ -4,14 +4,19 @@ use log;
 use std::collections::HashMap;
 use z3;
 
-pub fn prove(input: Program) -> bool {
+pub fn prove(input: Program, funcs_to_prove: Vec<String>) -> bool {
     // Create context for each command and try to prove it individually?
     // All that we have to prove are assertions, all the rest just modifies context.
 
     // For now just display everything here when it happens.
     for func in input.content.clone() {
         let f_name = func.name.clone();
-        log::info!("Proving function: {}", f_name);
+        if !funcs_to_prove.contains(&f_name) && !funcs_to_prove.is_empty() {
+            log::debug!("Skipping function: {}", f_name);
+            continue;
+        } else {
+            log::info!("Proving function: {}", f_name);
+        }
 
         let mut to_prove = func.clone();
 
