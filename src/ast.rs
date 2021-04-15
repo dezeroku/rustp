@@ -106,8 +106,6 @@ pub enum Type {
     /// type of the array and its length
     Array(Box<Type>, i32),
     Unit,
-    /// placeholder to be used when parsing expressions with nothing on the right side (infer is needed)
-    Unknown,
 }
 
 impl fmt::Display for Type {
@@ -120,7 +118,6 @@ impl fmt::Display for Type {
             Type::ReferenceMutable(a) => write!(f, "mut&({})", a),
             Type::Array(a, l) => write!(f, "[{};{}]", a, l),
             Type::Unit => write!(f, "()"),
-            Type::Unknown => write!(f, "Unknown"),
         }
     }
 }
@@ -979,7 +976,7 @@ mod test {
     #[test]
     fn get_variables_binding1() {
         assert_eq!(
-            Binding::Declaration(Variable::Named(String::from("x")), Type::Unknown, false)
+            Binding::Declaration(Variable::Named(String::from("x")), Type::I32, false)
                 .get_variables(),
             set![Variable::Named(String::from("x"))]
         );
@@ -990,7 +987,7 @@ mod test {
         assert_eq!(
             Binding::Assignment(
                 Variable::Named(String::from("x")),
-                Type::Unknown,
+                Type::I32,
                 Value::Variable(Variable::Named(String::from("y"))),
                 false
             )
@@ -1008,13 +1005,13 @@ mod test {
             Binding::Tuple(vec![
                 Command::Binding(Binding::Assignment(
                     Variable::Named(String::from("x")),
-                    Type::Unknown,
+                    Type::I32,
                     Value::Variable(Variable::Named(String::from("y"))),
                     false
                 )),
                 Command::Binding(Binding::Declaration(
                     Variable::Named(String::from("x")),
-                    Type::Unknown,
+                    Type::Bool,
                     false
                 ))
             ])
@@ -1031,7 +1028,7 @@ mod test {
         assert_eq!(
             Binding::Assignment(
                 Variable::Named(String::from("x")),
-                Type::Unknown,
+                Type::Bool,
                 Value::Variable(Variable::Named(String::from("y"))),
                 false
             )
@@ -1050,7 +1047,7 @@ mod test {
                 ))))],
                 vec![vec![Command::Binding(Binding::Assignment(
                     Variable::Named(String::from("x")),
-                    Type::Unknown,
+                    Type::I32,
                     Value::Unit,
                     false
                 )),]],
@@ -1077,7 +1074,7 @@ mod test {
                 Value::Variable(Variable::Named(String::from("second")),),
                 vec![Command::Binding(Binding::Assignment(
                     Variable::Named(String::from("x")),
-                    Type::Unknown,
+                    Type::I32,
                     Value::Unit,
                     false
                 )),],
@@ -1101,7 +1098,7 @@ mod test {
                 ))))),
                 vec![Command::Binding(Binding::Assignment(
                     Variable::Named(String::from("x")),
-                    Type::Unknown,
+                    Type::I32,
                     Value::Unit,
                     false
                 )),],

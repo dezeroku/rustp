@@ -513,7 +513,7 @@ mod test {
         let mut for1 = Vec::new();
         for1.push(Command::Binding(Binding::Assignment(
             Variable::Named(String::from("a")),
-            Type::Unknown,
+            Type::I32,
             Value::Unit,
             false,
         )));
@@ -537,7 +537,7 @@ mod test {
         let mut for1 = Vec::new();
         for1.push(Command::Binding(Binding::Assignment(
             Variable::Named(String::from("b")),
-            Type::Unknown,
+            Type::I32,
             Value::Unit,
             false,
         )));
@@ -561,7 +561,7 @@ mod test {
         let mut for1 = Vec::new();
         for1.push(Command::Binding(Binding::Assignment(
             Variable::Named(String::from("b")),
-            Type::Unknown,
+            Type::I32,
             Value::Unit,
             false,
         )));
@@ -586,7 +586,7 @@ mod test {
         let mut for2 = Vec::new();
         for2.push(Command::Binding(Binding::Assignment(
             Variable::Named(String::from("c")),
-            Type::Unknown,
+            Type::I32,
             Value::Unit,
             false,
         )));
@@ -620,7 +620,7 @@ mod test {
         let mut if1 = Vec::new();
         if1.push(Command::Binding(Binding::Assignment(
             Variable::Named(String::from("a")),
-            Type::Unknown,
+            Type::I32,
             Value::Unit,
             false,
         )));
@@ -643,7 +643,7 @@ mod test {
         let mut if1 = Vec::new();
         if1.push(Command::Binding(Binding::Assignment(
             Variable::Named(String::from("b")),
-            Type::Unknown,
+            Type::I32,
             Value::Unit,
             false,
         )));
@@ -666,7 +666,7 @@ mod test {
         let mut if1 = Vec::new();
         if1.push(Command::Binding(Binding::Assignment(
             Variable::Named(String::from("b")),
-            Type::Unknown,
+            Type::I32,
             Value::Unit,
             false,
         )));
@@ -674,7 +674,7 @@ mod test {
         let mut el = Vec::new();
         el.push(Command::Binding(Binding::Assignment(
             Variable::Named(String::from("a")),
-            Type::Unknown,
+            Type::I32,
             Value::Unit,
             false,
         )));
