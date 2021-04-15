@@ -1,5 +1,4 @@
 use crate::ast::*;
-use crate::context;
 use log;
 use std::collections::HashMap;
 use z3;

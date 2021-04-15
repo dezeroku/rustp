@@ -1,5 +1,4 @@
 mod ast;
-mod context;
 mod parser;
 mod prover;
 mod simplifier;
