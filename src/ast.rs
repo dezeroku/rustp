@@ -135,8 +135,6 @@ pub enum Value {
     Reference(Box<Value>),
     ReferenceMutable(Box<Value>),
     Unit,
-    // To be used e.g. in input parameters of a function
-    Unknown,
 }
 
 impl fmt::Display for Value {
@@ -147,7 +145,6 @@ impl fmt::Display for Value {
             Value::Variable(var) => write!(f, "{}", var),
             Value::Tuple(tup) => write!(f, "{:?}", tup),
             Value::Array(arr) => write!(f, "{:?}", arr),
-            Value::Unknown => write!(f, "unknown"),
             Value::Unit => write!(f, "()"),
             Value::Dereference(x) => write!(f, "{:?}", x),
             Value::Reference(x) => write!(f, "{:?}", x),
@@ -719,7 +716,6 @@ impl VarGetter for Value {
             Value::Reference(a) => a.get_variables(),
             Value::ReferenceMutable(a) => a.get_variables(),
             Value::Unit => HashSet::new(),
-            Value::Unknown => HashSet::new(),
         }
     }
 }
@@ -888,10 +884,6 @@ impl Swapper for Value {
             Value::Unit => {
                 log::trace!("Value::Unit::swap: {} {} {}", self, var, val);
                 Value::Unit
-            }
-            Value::Unknown => {
-                log::trace!("Value::Unknown::swap: {} {} {}", self, var, val);
-                Value::Unknown
             }
         }
     }

@@ -302,7 +302,6 @@ impl ProvableValue for Value {
             Value::ReferenceMutable(_v) => unimplemented!(),
             Value::Dereference(_v) => unimplemented!(),
             Value::Unit => unimplemented!(),
-            Value::Unknown => unimplemented!(),
         }
     }
 
@@ -333,14 +332,6 @@ impl ProvableValue for Value {
             Value::ReferenceMutable(_v) => unimplemented!(),
             Value::Dereference(_v) => unimplemented!(),
             Value::Unit => unimplemented!(),
-            Value::Unknown => {
-                // TODO: what this should be set to?
-                // TODO: use the for_all quantifier properly, to test for all possible inputs, instead of trying to find the one that works?
-                // It's mostly used for the function input params
-                //let mut rng = rand::thread_rng();
-                //z3::ast::Int::new_const(ctx, rng.gen::<i32>().to_string())
-                z3::ast::Int::new_const(ctx, "_")
-            }
         }
     }
 }

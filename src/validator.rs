@@ -131,7 +131,6 @@ fn _get_namedecs_val(z: Value, mut decs: &mut Vec<Namedec>) {
             _get_namedecs_val(*a, &mut decs);
         }
         Value::Unit => {}
-        Value::Unknown => {}
     }
 }
 
