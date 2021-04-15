@@ -4,6 +4,181 @@ use log;
 use std::collections::HashMap;
 use z3;
 
+/// Return function with pre/postconditions properly wrapped, so it's ready to be proved
+fn wrap_function(f: Function) -> Function {
+    let mut to_prove = f.clone();
+
+    let mut temp = f.content;
+
+    // Set the noop as first, so the further generation works fine, even if assertion is first in the code
+    temp.insert(0, Command::Noop);
+
+    // Put the noop at the end so loops are in bounds, should be cleaned up in the end, similar to the push of noop above
+    temp.push(Command::Noop);
+
+    // TODO: Handle other return types
+    // Assign the value being returned to the ret'val variable
+    temp.push(Command::Binding(Binding::Assignment(
+        Variable::Named(String::from("return_value")),
+        f.output,
+        f.return_value,
+        false,
+    )));
+
+    // Set postcondition as last assert
+    temp.push(Command::ProveControl(ProveControl::Assert(
+        f.postcondition.clone(),
+    )));
+
+    to_prove.content = temp.clone();
+
+    log::debug!("START TO PROVE COMMAND LIST:");
+    for i in temp {
+        log::debug!("{:?}", i);
+    }
+    log::debug!("END TO PROVE COMMAND LIST:");
+
+    to_prove
+}
+
+/// Wrap asserts in {p}commands{q} triples, the {q} values are not yet expanded properly
+fn create_triples(
+    commands: Vec<Command>,
+    function_precondition: Bool,
+) -> Vec<(Bool, Vec<Command>, Bool)> {
+    let mut triples = Vec::new();
+
+    let precondition = function_precondition;
+    let mut code_till_now = Vec::new();
+
+    for command in commands {
+        log::debug!("{:?}", command);
+        match command.clone() {
+            Command::ProveControl(x) => {
+                let a = match x {
+                    ProveControl::Assert(z) => z,
+                    ProveControl::Assume(z) => z,
+                    ProveControl::LoopInvariant(z) => z,
+                };
+
+                code_till_now.push(command.clone());
+                triples.push((precondition.clone(), code_till_now.clone(), a));
+            }
+            z => {
+                code_till_now.push(z);
+            }
+        }
+        log::debug!("{:?}", triples);
+    }
+
+    triples
+}
+
+/// Actually compute the "real" postcondition that should be proven, based on the code
+fn calculate_triples(triples: Vec<(Bool, Vec<Command>, Bool)>) -> Vec<(Bool, Vec<Command>, Bool)> {
+    let mut triples_calculated = Vec::new();
+
+    // TODO: Consider also listing the original post, to make user output easier
+    for (p, mut _comms, mut q) in triples {
+        let mut comms = Vec::new();
+        // Invert array for proving - backwards
+        let mut check = true;
+        while check {
+            let t = _comms.pop();
+            match t {
+                Some(x) => {
+                    comms.push(x);
+                }
+                None => {
+                    check = false;
+                }
+            }
+        }
+        // Invert vector here - backwards, for proper postcondition expansion
+        log::trace!("{}", q);
+        for comm in comms.clone() {
+            match comm.clone() {
+                Command::ProveControl(_) => {}
+                _ => {
+                    log::trace!("{}", comm.clone());
+                    q = comm.get_pre(q.clone());
+                    log::trace!("{}", q);
+                }
+            }
+        }
+
+        triples_calculated.push((p, comms, q));
+    }
+
+    // Invert array for proving - forwards
+    let mut to_return = Vec::new();
+    let mut check = true;
+    while check {
+        let t = triples_calculated.pop();
+        match t {
+            Some(x) => {
+                to_return.push(x);
+            }
+            None => {
+                check = false;
+            }
+        }
+    }
+
+    to_return
+}
+
+/// Prove the triples
+fn prove_triples(to_prove: Vec<(Bool, Vec<Command>, Bool)>) -> bool {
+    log::debug!("START TO PROVE FINAL LIST:");
+    for i in to_prove.clone() {
+        log::debug!("{:?}", i);
+    }
+    log::debug!("END TO PROVE FINAL LIST:");
+
+    // TODO: is this needed?
+    // Isn't this kind of what we are proving separately for each case? As there's no need to
+    // check that p -> q for every single command, as we control the q generation. Only assertions matter.
+    //to_prove_vec_final.push((to_prove.precondition, Command::Noop, p_n));
+
+    for (p, command, q) in to_prove {
+        log::debug!("{} => [[{:?}]] => {}", p.clone(), command, q.clone());
+
+        let mut cfg = z3::Config::new();
+        cfg.set_model_generation(true);
+
+        let ctx = z3::Context::new(&cfg);
+        let t = z3::Solver::new(&ctx);
+
+        t.assert(
+            &p.clone()
+                .as_bool(&ctx)
+                .implies(&q.clone().as_bool(&ctx))
+                .not(),
+        );
+
+        let f = t.check();
+        log::debug!("{:?}", f);
+        log::debug!("{:?}", t.get_model());
+        let result = Some(f);
+
+        match result {
+            Some(z3::SatResult::Sat) => {
+                log::info!("Model: {:?}", t.get_model());
+                return false;
+            }
+            Some(z3::SatResult::Unsat) => {
+                log::info!("Proven: {:?}", command);
+            }
+            _ => {
+                panic!("Unknown result!")
+            }
+        }
+    }
+
+    true
+}
+
 /// Prove the program provided as an input.
 /// The funcs_to_prove vec may specify names of the functions to be proved, if empty all the functions are proved by default
 pub fn prove(input: Program, funcs_to_prove: Vec<String>) -> bool {
@@ -20,177 +195,20 @@ pub fn prove(input: Program, funcs_to_prove: Vec<String>) -> bool {
             log::info!("Proving function: {}", f_name);
         }
 
-        let mut to_prove = func.clone();
+        let wrapped_func = wrap_function(func);
 
-        let mut temp = func.content.clone();
+        let triples = create_triples(wrapped_func.content, wrapped_func.precondition);
 
-        // Set the noop as first, so the generation below works fine, even if assertion is first in the code
-        temp.insert(0, Command::Noop);
+        let calculated_triples = calculate_triples(triples);
 
-        // Put the noop at the end so loops are in bounds, should be cleaned up in the end, similar to the push of noop above
-        temp.push(Command::Noop);
+        let t = prove_triples(calculated_triples);
 
-        // TODO: Handle other return types
-        // Assign the value being returned to the ret'val variable
-        temp.push(Command::Binding(Binding::Assignment(
-            Variable::Named(String::from("return_value")),
-            func.output,
-            func.return_value,
-            false,
-        )));
-
-        // Set postcondition as last assert
-        temp.push(Command::ProveControl(ProveControl::Assert(
-            func.postcondition.clone(),
-        )));
-
-        to_prove.content = temp.clone();
-        log::debug!("START TO PROVE COMMAND LIST:");
-        for i in temp.clone() {
-            log::debug!("{:?}", i);
+        if t {
+            log::info!("Successfully proved function: {}", f_name);
+        } else {
+            log::info!("Failed to prove function: {}", f_name);
+            return false;
         }
-        log::debug!("END TO PROVE COMMAND LIST:");
-
-        let mut to_prove_vec = temp;
-
-        let mut to_prove_vec_temp = Vec::new();
-
-        // Create a list of small contexts, that would be {precondition} bunch of code {assertion}
-
-        let precondition = to_prove.precondition;
-        let mut code_till_now = Vec::new();
-        //let mut q = Bool::True;
-        // Just an initializer
-        //let mut p = Bool::True;
-
-        for command in to_prove_vec {
-            log::debug!("{:?}", command);
-            match command.clone() {
-                Command::ProveControl(x) => {
-                    let a = match x {
-                        ProveControl::Assert(z) => z,
-                        ProveControl::Assume(z) => z,
-                        ProveControl::LoopInvariant(z) => z,
-                    };
-
-                    // Is this really needed or does it make the context look worse?
-                    code_till_now.push(command.clone());
-                    to_prove_vec_temp.push((precondition.clone(), code_till_now.clone(), a));
-                    //let (mut p, mut command, mut q) = to_prove_vec_temp.pop().unwrap();
-                    //q = Bool::And(Box::new(q), Box::new(a));
-                    //to_prove_vec_temp.push((p, command, q));
-                }
-                z => {
-                    // Check the assertions, if something has to be added to current "real command" q
-
-                    code_till_now.push(z);
-                    // Get p based on the command
-                    //p = z.get_pre(q.clone());
-
-                    //to_prove_vec_temp.push((p.clone(), command, q.clone()));
-                    //q = p.clone();
-                }
-            }
-            log::debug!("{:?}", to_prove_vec_temp);
-        }
-        // Remember the p of first command to check if precondition implies it later on.
-        //let p_n = p;
-
-        // Work through to_prove_vec_temp and calculate the final posts based on the code
-
-        let mut to_prove_vec_temp_calculated = Vec::new();
-
-        // TODO: Consider also listing the original post, to make user output easier
-        for (p, mut _comms, mut q) in to_prove_vec_temp {
-            let mut comms = Vec::new();
-            // Invert array for proving
-            let mut check = true;
-            while check {
-                let t = _comms.pop();
-                match t {
-                    Some(x) => {
-                        comms.push(x);
-                    }
-                    None => {
-                        check = false;
-                    }
-                }
-            }
-
-            // Invert vector here, for proper postcondition expansion
-
-            log::trace!("{}", q);
-            for comm in comms.clone() {
-                match comm.clone() {
-                    Command::ProveControl(_) => {}
-                    _ => {
-                        log::trace!("{}", comm.clone());
-                        q = comm.get_pre(q.clone());
-                        log::trace!("{}", q);
-                    }
-                }
-            }
-
-            to_prove_vec_temp_calculated.push((p, comms, q));
-        }
-
-        let mut to_prove_vec_final = Vec::new();
-        // Invert array for proving
-        let mut check = true;
-        while check {
-            let t = to_prove_vec_temp_calculated.pop();
-            match t {
-                Some(x) => {
-                    to_prove_vec_final.push(x);
-                }
-                None => {
-                    check = false;
-                }
-            }
-        }
-
-        log::debug!("START TO PROVE FINAL LIST:");
-        for i in to_prove_vec_final.clone() {
-            log::debug!("{:?}", i);
-        }
-        log::debug!("END TO PROVE FINAL LIST:");
-
-        //to_prove_vec_final.push((to_prove.precondition, Command::Noop, p_n));
-
-        for (p, command, q) in to_prove_vec_final {
-            log::debug!("{} => [[{:?}]] => {}", p.clone(), command, q.clone());
-
-            let mut cfg = z3::Config::new();
-            cfg.set_model_generation(true);
-
-            let ctx = z3::Context::new(&cfg);
-            let t = z3::Solver::new(&ctx);
-
-            t.assert(
-                &p.clone()
-                    .as_bool(&ctx)
-                    .implies(&q.clone().as_bool(&ctx))
-                    .not(),
-            );
-
-            let f = t.check();
-            log::debug!("{:?}", f);
-            log::debug!("{:?}", t.get_model());
-            let result = Some(f);
-
-            match result {
-                Some(z3::SatResult::Sat) => {
-                    log::info!("Model: {:?}", t.get_model());
-                    return false;
-                }
-                Some(z3::SatResult::Unsat) => {
-                    log::info!("Proven: {:?}", command);
-                }
-                _ => {}
-            }
-        }
-
-        log::info!("Successfully proved function: {}", f_name);
     }
 
     true
