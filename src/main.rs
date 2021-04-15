@@ -84,7 +84,7 @@ fn setup_logging(level: i32, z3_debug: bool) {
     log::info!("Debug level: {}", s);
 }
 
-fn args() -> (String, i32, bool, Vec<String>) {
+fn args() -> (String, i32, bool, Vec<String>, bool) {
     let matches = App::new("rustp")
         .version("1.0")
         .author("d0ku <darthtyranus666666@gmail.com>")
@@ -109,6 +109,13 @@ fn args() -> (String, i32, bool, Vec<String>) {
                 .about("Sets Z3 module logging verbosity to DEBUG"),
         )
         .arg(
+            Arg::new("no-rustc-check")
+                .long("no-rustc-check")
+                .takes_value(false)
+                .about("Don't check if the code provided is correct Rust code (highly dangerous option, use with caution)"),
+        )
+
+        .arg(
             Arg::new("function")
                 .about("the function to prove (does not check for the existence)")
                 .takes_value(true)
@@ -131,6 +138,7 @@ fn args() -> (String, i32, bool, Vec<String>) {
     };
 
     let z3_debug = matches.is_present("z3-debug");
+    let no_rustc_check = matches.is_present("no-rustc-check");
 
     let mut functions = Vec::new();
     if let Some(to_prove) = matches.values_of("function") {
@@ -138,7 +146,7 @@ fn args() -> (String, i32, bool, Vec<String>) {
             functions.push(f.to_string());
         }
     }
-    (filename, verbosity, z3_debug, functions)
+    (filename, verbosity, z3_debug, functions, no_rustc_check)
 }
 
 fn validate(input: ast::Program) {
@@ -162,14 +170,19 @@ fn main() {
     #[cfg(debug_assertions)]
     println!("Running a DEBUG version");
 
-    let (_filename, verbosity, z3_debug, functions) = args();
+    let (_filename, verbosity, z3_debug, functions, no_rustc_check) = args();
     let filename = &_filename.as_str();
 
     setup_logging(verbosity, z3_debug);
 
     log::info!("Checking file: {}", filename);
 
-    rustc_check(filename);
+    if no_rustc_check {
+        log::info!("Rustc check explicitly disabled via --no-rustc-check");
+    } else {
+        log::info!("Checking if the code is valid Rust via rustc");
+        rustc_check(filename);
+    }
 
     let tree = parse(filename);
     let simplified = simplifier::simplify(tree);
