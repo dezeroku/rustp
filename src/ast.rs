@@ -356,6 +356,55 @@ impl fmt::Display for Function {
     }
 }
 
+/// Update the precondition with proper 'old assertions
+pub trait PreconditionCreator {
+    fn update_precondition(self) -> Self;
+}
+
+impl PreconditionCreator for Function {
+    fn update_precondition(self) -> Self {
+        let mut t = self;
+        let inputs = t.input.clone();
+        let mut vars = HashSet::new();
+        for i in inputs {
+            vars.extend(i.get_affected_variables());
+        }
+
+        // Actually add the 'old == original assertions
+        // TODO: IMPORTANT: this should actually take types in the matter, how are we supposed to compare bools?
+        for i in vars {
+            t.precondition = Bool::And(Box::new(t.precondition), Box::new(i.old_wrapper()));
+        }
+
+        t
+    }
+}
+
+/// Create a bool condition setting var == var'old
+trait OldWrapper {
+    fn old_wrapper(self) -> Bool;
+}
+
+impl OldWrapper for Variable {
+    fn old_wrapper(self) -> Bool {
+        match self {
+            Variable::Named(x) => Bool::Equal(
+                Expr::Value(Box::new(Value::Variable(Variable::Named(x.clone())))),
+                Expr::Value(Box::new(Value::Variable(Variable::Named(
+                    x.clone() + "'old",
+                )))),
+            ),
+            Variable::Empty => Bool::True,
+            Variable::ArrayElem(_, a) => {
+                unimplemented!();
+            }
+            Variable::TupleElem(_, a) => {
+                unimplemented!();
+            }
+        }
+    }
+}
+
 /// List all the variables that are assigned to
 pub trait AffectedVarGetter {
     fn get_affected_variables(self) -> HashSet<Variable>;

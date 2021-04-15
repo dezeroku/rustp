@@ -18,9 +18,14 @@ fn no_undefined(input: Program) -> bool {
         // Add function params as recognized names
         for i in func.clone().input {
             match i {
-                Binding::Declaration(name, _, _) => {
-                    def_push(&mut definitions, name);
-                }
+                // TODO: clean this up
+                Binding::Declaration(name, _, _) => match name.clone() {
+                    Variable::Named(x) => {
+                        def_push(&mut definitions, name);
+                        def_push(&mut definitions, Variable::Named(x + "'old"));
+                    }
+                    _ => unimplemented!(),
+                },
                 _ => panic!("Unsupported function parameter provided: {}", i),
             }
             //
@@ -270,7 +275,12 @@ fn no_forbidden_decs_check(val: Variable) -> bool {
     match val {
         Variable::Named(a) => {
             if !FORBIDDEN_DECS.contains(&a.as_str()) {
-                true
+                if !a.ends_with("'old") {
+                    true
+                } else {
+                    println!("'old variable used in binding: {}", a);
+                    false
+                }
             } else {
                 println!("Keyword variable used in binding: {}", a);
                 false
@@ -447,6 +457,13 @@ mod test {
     #[test]
     fn no_forbidden_decs_check2() {
         assert!(no_forbidden_decs_check(Variable::Named(String::from("a"))));
+    }
+
+    #[test]
+    fn no_forbidden_decs_check3() {
+        assert!(!no_forbidden_decs_check(Variable::Named(String::from(
+            "a'old"
+        ))));
     }
 
     #[test]

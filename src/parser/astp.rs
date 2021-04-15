@@ -1,4 +1,5 @@
 use crate::ast;
+use crate::ast::PreconditionCreator;
 use crate::parser::boolean;
 use crate::parser::math;
 
@@ -6,7 +7,7 @@ use nom::{
     branch::alt, bytes::complete::tag, bytes::complete::take_until, bytes::complete::take_while1,
     character::complete::char, character::complete::multispace0, character::complete::newline,
     character::complete::space0, character::complete::space1, combinator::not, combinator::opt,
-    multi::many0, multi::many1, sequence::tuple, IResult,
+    combinator::recognize, multi::many0, multi::many1, sequence::tuple, IResult,
 };
 
 static KEYWORDS: [&'static str; 7] = ["let", "true", "false", "&&", "||", "!", "_"];
@@ -165,7 +166,8 @@ fn function(input: &str) -> IResult<&str, ast::Function> {
                 precondition: pre,
                 postcondition: post,
                 return_value: ret_val,
-            },
+            }
+            .update_precondition(),
         ))
     })
 }
@@ -597,9 +599,10 @@ fn function_name(input: &str) -> IResult<&str, &str> {
 fn variable_name(input: &str) -> IResult<&str, &str> {
     let l = |x: char| char::is_alphabetic(x) || '_' == x;
 
-    take_while1(l)(input).and_then(|(next_input, res)| {
+    recognize(tuple((take_while1(l), opt(tag("'old")))))(input).and_then(|(next_input, res)| {
         // if matches then fail
         if !KEYWORDS.contains(&res) {
+            // check for the 'old case
             Ok((next_input, res))
         } else {
             Err(nom::Err::Error(nom::error::Error::new(
@@ -1345,7 +1348,7 @@ mod test {
             return_value: ast::Value::Unit,
         };
 
-        assert!(a == b);
+        assert_eq!(a, b);
     }
 
     #[test]
@@ -1382,12 +1385,12 @@ mod test {
             content: content,
             input: input,
             output: ast::Type::Bool,
-            precondition: ast::Bool::True,
+            precondition: a.precondition.clone(),
             postcondition: ast::Bool::True,
             return_value: ast::Value::Unit,
         };
 
-        assert!(a == b);
+        assert_eq!(a, b);
     }
 
     #[test]
@@ -1420,7 +1423,7 @@ mod test {
             content: content,
             input: input,
             output: ast::Type::Bool,
-            precondition: ast::Bool::And(Box::new(ast::Bool::False), Box::new(ast::Bool::False)),
+            precondition: a.precondition.clone(),
             postcondition: ast::Bool::And(
                 Box::new(ast::Bool::Equal(
                     ast::Expr::Value(Box::new(ast::Value::Variable(ast::Variable::Named(
@@ -1433,7 +1436,7 @@ mod test {
             return_value: ast::Value::Unit,
         };
 
-        assert!(a == b);
+        assert_eq!(a, b);
     }
 
     #[test]
@@ -1466,7 +1469,7 @@ mod test {
             content: content,
             input: input,
             output: ast::Type::Bool,
-            precondition: ast::Bool::And(Box::new(ast::Bool::False), Box::new(ast::Bool::False)),
+            precondition: a.precondition.clone(),
             postcondition: ast::Bool::And(
                 Box::new(ast::Bool::Equal(
                     ast::Expr::Value(Box::new(ast::Value::Variable(ast::Variable::Named(
@@ -1479,7 +1482,7 @@ mod test {
             return_value: ast::Value::Expr(ast::Expr::Number(13)),
         };
 
-        assert!(a == b);
+        assert_eq!(a, b);
     }
 
     #[test]
