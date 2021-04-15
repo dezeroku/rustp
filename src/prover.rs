@@ -653,7 +653,7 @@ mod test {
 
     #[test]
     fn prove_postcondition_fail1() {
-        assert!(prove(Program {
+        assert!(!prove(Program {
             content: vec![Function {
                 name: String::from("test"),
                 content: vec![Command::Binding(Binding::Assignment(
