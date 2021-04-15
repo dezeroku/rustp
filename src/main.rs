@@ -12,12 +12,10 @@ use std::process::{Command, Stdio};
 extern crate log;
 
 fn rustc_check(filename: &str) {
-    // TODO: Is handling Windows required?
-    // This would require properly managing the /tmp, seems to be cheap
     let status = Command::new("rustc")
         .arg(filename)
         .arg("--out-dir")
-        .arg("/tmp")
+        .arg(std::env::temp_dir())
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
