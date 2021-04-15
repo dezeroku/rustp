@@ -1,6 +1,5 @@
 use crate::ast::*;
 use log;
-use std::collections::HashMap;
 use z3;
 
 /// Return function with pre/postconditions properly wrapped, so it's ready to be proved
@@ -224,7 +223,7 @@ impl Provable for Command {
             Command::Binding(x) => x.get_pre(q),
             Command::Assignment(x) => x.get_pre(q),
             Command::ProveControl(x) => x.get_pre(q),
-            Command::Block(x) => unimplemented!(),
+            Command::Block(_x) => unimplemented!(),
             Command::Noop => q,
         }
     }
@@ -233,13 +232,13 @@ impl Provable for Command {
 impl Provable for Binding {
     fn get_pre(self, q: Bool) -> Bool {
         match self {
-            Binding::Declaration(var, t, m) => Bool::True,
+            Binding::Declaration(_, _, _) => q,
 
-            Binding::Assignment(var, t, val, m) => {
+            Binding::Assignment(var, _, val, _) => {
                 // Swap all `var` occurences with the `val` in the condition
                 q.swap(var, val)
             }
-            Binding::Tuple(vec) => {
+            Binding::Tuple(_vec) => {
                 unimplemented!()
             }
         }
@@ -262,7 +261,7 @@ impl Provable for Assignment {
 }
 
 impl Provable for ProveControl {
-    fn get_pre(self, q: Bool) -> Bool {
+    fn get_pre(self, _q: Bool) -> Bool {
         match self {
             ProveControl::Assert(a) => a,
             ProveControl::Assume(a) => a,
@@ -283,7 +282,7 @@ impl ProvableValue for Value {
             Value::Bool(b) => b.as_bool(ctx),
             Value::Variable(x) => match x {
                 Variable::Named(name) => z3::ast::Bool::new_const(ctx, name),
-                Variable::Empty => unimplemented!(),
+                Variable::Empty => panic!("Empty variable tried to be used as a bool!"),
                 Variable::ArrayElem(arr_name, ind) => {
                     let t = z3::ast::Array::new_const(
                         ctx,
@@ -294,14 +293,14 @@ impl ProvableValue for Value {
 
                     t.select(&ind.as_int(ctx)).as_bool().unwrap()
                 }
-                Variable::TupleElem(name, ind) => unimplemented!(),
+                Variable::TupleElem(_name, _ind) => unimplemented!(),
             },
-            Value::Tuple(t) => unimplemented!(),
-            Value::Array(a) => unimplemented!(),
-            Value::FunctionCall(name, args) => unimplemented!(),
-            Value::Reference(v) => unimplemented!(),
-            Value::ReferenceMutable(v) => unimplemented!(),
-            Value::Dereference(v) => unimplemented!(),
+            Value::Tuple(t) => panic!("Tuple {:?} tried to be used as a bool!", t),
+            Value::Array(a) => panic!("Array {:?} tried to be used as a bool!", a),
+            Value::FunctionCall(_name, _args) => unimplemented!(),
+            Value::Reference(_v) => unimplemented!(),
+            Value::ReferenceMutable(_v) => unimplemented!(),
+            Value::Dereference(_v) => unimplemented!(),
             Value::Unit => unimplemented!(),
             Value::Unknown => unimplemented!(),
         }
@@ -313,7 +312,7 @@ impl ProvableValue for Value {
             Value::Bool(b) => panic!("Bool value ({}) used as an int", b),
             Value::Variable(x) => match x {
                 Variable::Named(name) => z3::ast::Int::new_const(ctx, name),
-                Variable::Empty => unimplemented!(),
+                Variable::Empty => panic!("Empty variable tried to be used as an int!"),
                 Variable::ArrayElem(arr_name, ind) => {
                     let t = z3::ast::Array::new_const(
                         ctx,
@@ -325,14 +324,14 @@ impl ProvableValue for Value {
                     t.select(&ind.as_int(ctx)).as_int().unwrap()
                 }
 
-                Variable::TupleElem(name, ind) => unimplemented!(),
+                Variable::TupleElem(_name, _ind) => unimplemented!(),
             },
-            Value::Tuple(t) => unimplemented!(),
-            Value::Array(a) => unimplemented!(),
-            Value::FunctionCall(name, args) => unimplemented!(),
-            Value::Reference(v) => unimplemented!(),
-            Value::ReferenceMutable(v) => unimplemented!(),
-            Value::Dereference(v) => unimplemented!(),
+            Value::Tuple(t) => panic!("Tuple {:?} tried to be used as an intl!", t),
+            Value::Array(a) => panic!("Array {:?} tried to be used as an int!", a),
+            Value::FunctionCall(_name, _args) => unimplemented!(),
+            Value::Reference(_v) => unimplemented!(),
+            Value::ReferenceMutable(_v) => unimplemented!(),
+            Value::Dereference(_v) => unimplemented!(),
             Value::Unit => unimplemented!(),
             Value::Unknown => {
                 // TODO: what this should be set to?
@@ -418,7 +417,7 @@ impl ProvableCommand for Command {
                     log::debug!("ASSERT: {}", x);
                     (true, x)
                 }
-                ProveControl::Assume(b) => {
+                ProveControl::Assume(_b) => {
                     // No need to prove these, we believe them without testing
                     // Just pas the information from that further on
                     //true, b.as_bool(ctx).not())

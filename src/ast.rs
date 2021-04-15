@@ -395,10 +395,10 @@ impl OldWrapper for Variable {
                 )))),
             ),
             Variable::Empty => Bool::True,
-            Variable::ArrayElem(_, a) => {
+            Variable::ArrayElem(_, _a) => {
                 unimplemented!();
             }
-            Variable::TupleElem(_, a) => {
+            Variable::TupleElem(_, _a) => {
                 unimplemented!();
             }
         }
