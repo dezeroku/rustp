@@ -201,6 +201,7 @@ fn prove_triples(to_prove: Vec<(Bool, Vec<Command>, Bool)>) -> bool {
         match result {
             Some(z3::SatResult::Sat) => {
                 log::debug!("Model: {:?}", t.get_model());
+                println!("Failed to prove: {} => {}", p, q);
                 return false;
             }
             Some(z3::SatResult::Unsat) => {
