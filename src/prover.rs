@@ -71,13 +71,9 @@ fn wrap_function(f: Function) -> Function {
 }
 
 /// Wrap asserts in {p}commands{q} triples, the {q} values are not yet expanded properly
-fn create_triples(
-    commands: Vec<Command>,
-    function_precondition: Bool,
-) -> Vec<(Bool, Vec<Command>, Bool)> {
+fn create_triples(commands: Vec<Command>, precondition: Bool) -> Vec<(Bool, Vec<Command>, Bool)> {
     let mut triples = Vec::new();
 
-    let precondition = function_precondition;
     let mut code_till_now = Vec::new();
 
     for command in commands {
@@ -129,7 +125,7 @@ fn calculate_triples(triples: Vec<(Bool, Vec<Command>, Bool)>) -> Vec<(Bool, Vec
                 Command::ProveControl(_) => {}
                 _ => {
                     log::trace!("{}", comm.clone());
-                    q = comm.get_pre(q.clone());
+                    q = comm.get_pre(q.clone(), p.clone());
                     log::trace!("{}", q);
                 }
             }
@@ -159,8 +155,8 @@ fn calculate_triples(triples: Vec<(Bool, Vec<Command>, Bool)>) -> Vec<(Bool, Vec
 /// Prove the triples
 fn prove_triples(to_prove: Vec<(Bool, Vec<Command>, Bool)>) -> bool {
     log::debug!("START TO PROVE FINAL LIST:");
-    for i in to_prove.clone() {
-        log::debug!("{:?}", i);
+    for (p, _, q) in to_prove.clone() {
+        log::debug!("{} => {}", p, q);
     }
     log::debug!("END TO PROVE FINAL LIST:");
 
@@ -244,23 +240,23 @@ pub fn prove(input: Program, funcs_to_prove: Vec<String>) -> bool {
 
 trait Provable {
     /// Find the P for {P} S {Q} to prove
-    fn get_pre(self, q: Bool) -> Bool;
+    fn get_pre(self, q: Bool, p: Bool) -> Bool;
 }
 
 impl Provable for Command {
-    fn get_pre(self, q: Bool) -> Bool {
+    fn get_pre(self, q: Bool, p: Bool) -> Bool {
         match self {
-            Command::Binding(x) => x.get_pre(q),
-            Command::Assignment(x) => x.get_pre(q),
-            Command::ProveControl(x) => x.get_pre(q),
-            Command::Block(_x) => unimplemented!(),
+            Command::Binding(x) => x.get_pre(q, p),
+            Command::Assignment(x) => x.get_pre(q, p),
+            Command::ProveControl(x) => x.get_pre(q, p),
+            Command::Block(x) => x.get_pre(q, p),
             Command::Noop => q,
         }
     }
 }
 
 impl Provable for Binding {
-    fn get_pre(self, q: Bool) -> Bool {
+    fn get_pre(self, q: Bool, _p: Bool) -> Bool {
         match self {
             Binding::Declaration(_, _, _) => q,
 
@@ -276,12 +272,12 @@ impl Provable for Binding {
 }
 
 impl Provable for Assignment {
-    fn get_pre(self, q: Bool) -> Bool {
+    fn get_pre(self, q: Bool, p: Bool) -> Bool {
         match self {
             Assignment::Tuple(vec) => {
                 let mut t = q;
                 for i in vec {
-                    t = i.get_pre(t);
+                    t = i.get_pre(t, p.clone());
                 }
                 t
             }
@@ -291,10 +287,94 @@ impl Provable for Assignment {
 }
 
 impl Provable for ProveControl {
-    fn get_pre(self, _q: Bool) -> Bool {
+    fn get_pre(self, _q: Bool, _p: Bool) -> Bool {
         match self {
             ProveControl::Assert(a) => a,
             ProveControl::Assume(a) => a,
+        }
+    }
+}
+
+impl Provable for Block {
+    fn get_pre(self, q: Bool, _p: Bool) -> Bool {
+        match self {
+            Block::If(mut ifs, mut comms, el) => {
+                // Calculate p for all the possible choices
+                // Then it's (p1 && cond1) || (!p1 && p2 && cond2) || (!p1 && !p2 && p3 && cond3) || ... || (!p1 && !p2 && !p3 && .. && !p3 && p_el)
+
+                // TODO: check the below implementation for any problems, it should be treated as a PoC for now
+
+                // Handle the else case
+                comms.push(el);
+                ifs.push(Bool::True);
+
+                // The code generated conditions
+                let mut ps = Vec::new();
+                for mut c in comms {
+                    // This is pretty stupid, but hey...
+                    c.push(Command::Noop);
+                    c.push(Command::ProveControl(ProveControl::Assert(q.clone())));
+
+                    log::trace!("q BEFORE: {}", q.clone());
+                    log::trace!("c: {:?}", c.clone());
+                    // TODO: Probably real precondition should be used instead of q here
+                    // should it have some local context?
+                    let triples = create_triples(c, q.clone());
+                    log::trace!("triples: {:?}", triples.clone());
+                    let mut calculated_triples = calculate_triples(triples);
+                    log::trace!("calculated_triples: {:?}", calculated_triples.clone());
+
+                    let (_, _, f) = calculated_triples.pop().unwrap();
+                    let mut temp = f;
+                    for (_, _, t) in calculated_triples {
+                        temp = Bool::And(Box::new(temp), Box::new(t));
+                        log::debug!("q AFTER: {}", temp);
+                    }
+                    ps.push(temp);
+                }
+
+                // The ifs generated conditions
+                let mut ifs_combined = Vec::new();
+                for i in ifs {
+                    let mut temp = i;
+                    for l in ifs_combined.clone() {
+                        temp = Bool::And(Box::new(temp), Box::new(Bool::Not(Box::new(l))));
+                    }
+                    ifs_combined.push(temp);
+                }
+
+                // Sanity check
+                assert!(ifs_combined.len() == ps.len());
+
+                // Merge the two
+                let mut merged = Vec::new();
+                while !ifs_combined.is_empty() {
+                    let t = ps.pop().unwrap();
+                    let i = ifs_combined.pop().unwrap();
+
+                    merged.push((i, t));
+                }
+
+                // Create final bool
+                let (i, p) = merged.pop().unwrap();
+                let mut to_return = Bool::And(Box::new(i), Box::new(p));
+                for (i, p) in merged {
+                    log::debug!("{}", i);
+                    log::debug!("{}", p);
+                    to_return = Bool::Or(
+                        Box::new(to_return),
+                        Box::new(Bool::And(Box::new(i), Box::new(p))),
+                    );
+                }
+
+                to_return
+            }
+            Block::While(_cond, _comms, _inv) => {
+                unimplemented!()
+            }
+            Block::ForRange(_iter, _first, _last, _comms, _inv) => {
+                unimplemented!()
+            }
         }
     }
 }
@@ -994,6 +1074,418 @@ mod test {
                         ),
                         Expr::Number(4)
                     ),
+                    return_value: Value::Unit
+                }]
+            },
+            vec![]
+        ));
+    }
+
+    #[test]
+    fn prove_if1() {
+        assert!(prove(
+            Program {
+                content: vec![Function {
+                    name: String::from("test"),
+                    content: vec![Command::Block(Block::If(
+                        vec![Bool::True],
+                        vec![vec![Command::Binding(Binding::Assignment(
+                            Variable::Named(String::from("x")),
+                            Type::I32,
+                            Value::Expr(Expr::Number(3)),
+                            false
+                        ))]],
+                        vec![]
+                    ))],
+                    input: vec![],
+                    output: Type::Unit,
+                    precondition: Bool::And(
+                        Box::new(Bool::Equal(
+                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                                "x"
+                            ))))),
+                            Expr::Number(1)
+                        )),
+                        Box::new(Bool::Equal(
+                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                                "x"
+                            ))))),
+                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                                "x'old"
+                            ))))),
+                        ))
+                    ),
+                    postcondition: Bool::Equal(
+                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                            "x"
+                        ))))),
+                        Expr::Number(3)
+                    ),
+
+                    return_value: Value::Unit
+                }]
+            },
+            vec![]
+        ));
+    }
+
+    #[test]
+    fn prove_if2() {
+        assert!(prove(
+            Program {
+                content: vec![Function {
+                    name: String::from("test"),
+                    content: vec![Command::Block(Block::If(
+                        vec![Bool::True],
+                        vec![vec![Command::Binding(Binding::Assignment(
+                            Variable::Named(String::from("x")),
+                            Type::I32,
+                            Value::Expr(Expr::Number(3)),
+                            false
+                        ))]],
+                        vec![Command::Binding(Binding::Assignment(
+                            Variable::Named(String::from("x")),
+                            Type::I32,
+                            Value::Expr(Expr::Number(1)),
+                            false
+                        ))]
+                    ))],
+                    input: vec![],
+                    output: Type::Unit,
+                    precondition: Bool::And(
+                        Box::new(Bool::Equal(
+                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                                "x"
+                            ))))),
+                            Expr::Number(1)
+                        )),
+                        Box::new(Bool::Equal(
+                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                                "x"
+                            ))))),
+                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                                "x'old"
+                            ))))),
+                        ))
+                    ),
+                    postcondition: Bool::Equal(
+                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                            "x"
+                        ))))),
+                        Expr::Number(3)
+                    ),
+
+                    return_value: Value::Unit
+                }]
+            },
+            vec![]
+        ));
+    }
+
+    #[test]
+    fn prove_if_fail1() {
+        assert!(!prove(
+            Program {
+                content: vec![Function {
+                    name: String::from("test"),
+                    content: vec![Command::Block(Block::If(
+                        vec![Bool::False],
+                        vec![vec![Command::Binding(Binding::Assignment(
+                            Variable::Named(String::from("x")),
+                            Type::I32,
+                            Value::Expr(Expr::Number(3)),
+                            false
+                        ))]],
+                        vec![Command::Binding(Binding::Assignment(
+                            Variable::Named(String::from("x")),
+                            Type::I32,
+                            Value::Expr(Expr::Number(1)),
+                            false
+                        ))]
+                    ))],
+                    input: vec![],
+                    output: Type::Unit,
+                    precondition: Bool::And(
+                        Box::new(Bool::Equal(
+                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                                "x"
+                            ))))),
+                            Expr::Number(1)
+                        )),
+                        Box::new(Bool::Equal(
+                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                                "x"
+                            ))))),
+                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                                "x'old"
+                            ))))),
+                        ))
+                    ),
+                    postcondition: Bool::Equal(
+                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                            "x"
+                        ))))),
+                        Expr::Number(3)
+                    ),
+
+                    return_value: Value::Unit
+                }]
+            },
+            vec![]
+        ));
+    }
+
+    #[test]
+    fn prove_if_nested1() {
+        assert!(prove(
+            Program {
+                content: vec![Function {
+                    name: String::from("test"),
+                    content: vec![Command::Block(Block::If(
+                        vec![Bool::True],
+                        vec![vec![Command::Block(Block::If(
+                            vec![Bool::True],
+                            vec![vec![Command::Binding(Binding::Assignment(
+                                Variable::Named(String::from("x")),
+                                Type::I32,
+                                Value::Expr(Expr::Number(3)),
+                                false
+                            ))]],
+                            vec![Command::Binding(Binding::Assignment(
+                                Variable::Named(String::from("x")),
+                                Type::I32,
+                                Value::Expr(Expr::Number(1)),
+                                false
+                            ))]
+                        ))]],
+                        vec![Command::Binding(Binding::Assignment(
+                            Variable::Named(String::from("x")),
+                            Type::I32,
+                            Value::Expr(Expr::Number(1)),
+                            false
+                        ))]
+                    ))],
+                    input: vec![],
+                    output: Type::Unit,
+                    precondition: Bool::And(
+                        Box::new(Bool::Equal(
+                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                                "x"
+                            ))))),
+                            Expr::Number(1)
+                        )),
+                        Box::new(Bool::Equal(
+                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                                "x"
+                            ))))),
+                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                                "x'old"
+                            ))))),
+                        ))
+                    ),
+                    postcondition: Bool::Equal(
+                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                            "x"
+                        ))))),
+                        Expr::Number(3)
+                    ),
+
+                    return_value: Value::Unit
+                }]
+            },
+            vec![]
+        ));
+    }
+
+    #[test]
+    fn prove_if_nested_fail1() {
+        assert!(!prove(
+            Program {
+                content: vec![Function {
+                    name: String::from("test"),
+                    content: vec![Command::Block(Block::If(
+                        vec![Bool::True],
+                        vec![vec![Command::Block(Block::If(
+                            vec![Bool::False],
+                            vec![vec![Command::Binding(Binding::Assignment(
+                                Variable::Named(String::from("x")),
+                                Type::I32,
+                                Value::Expr(Expr::Number(3)),
+                                false
+                            ))]],
+                            vec![Command::Binding(Binding::Assignment(
+                                Variable::Named(String::from("x")),
+                                Type::I32,
+                                Value::Expr(Expr::Number(1)),
+                                false
+                            ))]
+                        ))]],
+                        vec![Command::Binding(Binding::Assignment(
+                            Variable::Named(String::from("x")),
+                            Type::I32,
+                            Value::Expr(Expr::Number(1)),
+                            false
+                        ))]
+                    ))],
+                    input: vec![],
+                    output: Type::Unit,
+                    precondition: Bool::And(
+                        Box::new(Bool::Equal(
+                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                                "x"
+                            ))))),
+                            Expr::Number(1)
+                        )),
+                        Box::new(Bool::Equal(
+                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                                "x"
+                            ))))),
+                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                                "x'old"
+                            ))))),
+                        ))
+                    ),
+                    postcondition: Bool::Equal(
+                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                            "x"
+                        ))))),
+                        Expr::Number(3)
+                    ),
+
+                    return_value: Value::Unit
+                }]
+            },
+            vec![]
+        ));
+    }
+
+    #[test]
+    fn prove_if_multiple1() {
+        assert!(prove(
+            Program {
+                content: vec![Function {
+                    name: String::from("test"),
+                    content: vec![Command::Block(Block::If(
+                        vec![Bool::False, Bool::False, Bool::True],
+                        vec![
+                            vec![Command::Binding(Binding::Assignment(
+                                Variable::Named(String::from("x")),
+                                Type::I32,
+                                Value::Expr(Expr::Number(5)),
+                                false
+                            ))],
+                            vec![Command::Binding(Binding::Assignment(
+                                Variable::Named(String::from("x")),
+                                Type::I32,
+                                Value::Expr(Expr::Number(6)),
+                                false
+                            ))],
+                            vec![Command::Binding(Binding::Assignment(
+                                Variable::Named(String::from("x")),
+                                Type::I32,
+                                Value::Expr(Expr::Number(3)),
+                                false
+                            ))]
+                        ],
+                        vec![Command::Binding(Binding::Assignment(
+                            Variable::Named(String::from("x")),
+                            Type::I32,
+                            Value::Expr(Expr::Number(9)),
+                            false
+                        ))]
+                    ))],
+                    input: vec![],
+                    output: Type::Unit,
+                    precondition: Bool::And(
+                        Box::new(Bool::Equal(
+                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                                "x"
+                            ))))),
+                            Expr::Number(1)
+                        )),
+                        Box::new(Bool::Equal(
+                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                                "x"
+                            ))))),
+                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                                "x'old"
+                            ))))),
+                        ))
+                    ),
+                    postcondition: Bool::Equal(
+                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                            "x"
+                        ))))),
+                        Expr::Number(3)
+                    ),
+
+                    return_value: Value::Unit
+                }]
+            },
+            vec![]
+        ));
+    }
+
+    #[test]
+    fn prove_if_multiple_fail1() {
+        assert!(!prove(
+            Program {
+                content: vec![Function {
+                    name: String::from("test"),
+                    content: vec![Command::Block(Block::If(
+                        vec![Bool::False, Bool::True, Bool::False],
+                        vec![
+                            vec![Command::Binding(Binding::Assignment(
+                                Variable::Named(String::from("x")),
+                                Type::I32,
+                                Value::Expr(Expr::Number(3)),
+                                false
+                            ))],
+                            vec![Command::Binding(Binding::Assignment(
+                                Variable::Named(String::from("x")),
+                                Type::I32,
+                                Value::Expr(Expr::Number(5)),
+                                false
+                            ))],
+                            vec![Command::Binding(Binding::Assignment(
+                                Variable::Named(String::from("x")),
+                                Type::I32,
+                                Value::Expr(Expr::Number(3)),
+                                false
+                            ))]
+                        ],
+                        vec![Command::Binding(Binding::Assignment(
+                            Variable::Named(String::from("x")),
+                            Type::I32,
+                            Value::Expr(Expr::Number(3)),
+                            false
+                        ))]
+                    ))],
+                    input: vec![],
+                    output: Type::Unit,
+                    precondition: Bool::And(
+                        Box::new(Bool::Equal(
+                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                                "x"
+                            ))))),
+                            Expr::Number(1)
+                        )),
+                        Box::new(Bool::Equal(
+                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                                "x"
+                            ))))),
+                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                                "x'old"
+                            ))))),
+                        ))
+                    ),
+                    postcondition: Bool::Equal(
+                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                            "x"
+                        ))))),
+                        Expr::Number(3)
+                    ),
+
                     return_value: Value::Unit
                 }]
             },
