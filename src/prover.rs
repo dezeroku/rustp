@@ -178,6 +178,7 @@ fn prove_triples(to_prove: Vec<(Bool, Vec<Command>, Bool)>) -> bool {
 
     for (p, command, q) in to_prove {
         log::debug!("{} => [[{:?}]] => {}", p.clone(), command, q.clone());
+        log::info!("{} => {}", p.clone(), q.clone());
 
         let mut cfg = z3::Config::new();
         cfg.set_model_generation(true);
@@ -199,11 +200,11 @@ fn prove_triples(to_prove: Vec<(Bool, Vec<Command>, Bool)>) -> bool {
 
         match result {
             Some(z3::SatResult::Sat) => {
-                log::info!("Model: {:?}", t.get_model());
+                log::debug!("Model: {:?}", t.get_model());
                 return false;
             }
             Some(z3::SatResult::Unsat) => {
-                log::info!("Proven: {:?}", command);
+                log::debug!("Proven: {:?}", command);
             }
             _ => {
                 panic!("Unknown result!")
@@ -395,7 +396,12 @@ impl Provable for Block {
             Block::While(cond, mut comms, inv) => {
                 // TODO: this wasn't tested yet
                 let p = inv.clone();
-                let pre = Bool::And(Box::new(inv.clone()), Box::new(cond.clone()));
+
+                // TODO: this is strong invariant, we don't look for it yet
+                let strong_inv = inv.clone();
+                //Bool::And(Box::new(inv.clone()), Box::new(q.clone()));
+
+                let pre = Bool::And(Box::new(strong_inv.clone()), Box::new(cond.clone()));
 
                 // First check that the invariant works, so inv && cond -> inv
                 // This is pretty stupid, but hey...
@@ -413,18 +419,19 @@ impl Provable for Block {
 
                 // Also check that not condition && invariant => post
                 let pre_not = Bool::And(
-                    Box::new(inv.clone()),
+                    Box::new(strong_inv.clone()),
                     Box::new(Bool::Not(Box::new(cond.clone()))),
                 );
 
                 // Remove last assert and change it with the proper post
                 // These implications should be tested here it seems
+                // TODO: is this ok?
                 comms.pop();
                 comms.push(Command::ProveControl(ProveControl::Assert(q.clone())));
 
                 let triples_not = create_triples(comms.clone(), pre_not);
                 log::trace!("triples_not: {:?}", triples_not.clone());
-                let (mut calculated_triples_not, t) = calculate_triples(triples);
+                let (mut calculated_triples_not, t) = calculate_triples(triples_not);
                 if !t {
                     return (Bool::True, false);
                 }
