@@ -87,7 +87,6 @@ fn create_triples(
                 let a = match x {
                     ProveControl::Assert(z) => z,
                     ProveControl::Assume(z) => z,
-                    ProveControl::LoopInvariant(z) => z,
                 };
 
                 code_till_now.push(command.clone());
@@ -296,7 +295,6 @@ impl Provable for ProveControl {
         match self {
             ProveControl::Assert(a) => a,
             ProveControl::Assume(a) => a,
-            ProveControl::LoopInvariant(a) => a,
         }
     }
 }
@@ -445,7 +443,6 @@ impl ProvableCommand for Command {
                     //true, b.as_bool(ctx).not())
                     (false, z3::ast::Bool::from_bool(&ctx, true))
                 }
-                ProveControl::LoopInvariant(b) => (true, b.as_bool(ctx).not()),
             },
             _ => {
                 // Nothing to prove here

@@ -204,13 +204,6 @@ fn no_undefined_logic(
                     }
                 }
             }
-            Command::ProveControl(ProveControl::LoopInvariant(a)) => {
-                for i in get_namedecs(a) {
-                    if !no_undefined_check(&mut definitions, &functions, i) {
-                        return false;
-                    }
-                }
-            }
             Command::Binding(Binding::Declaration(name, _, _)) => {
                 def_push(&mut definitions, name);
             }
@@ -241,13 +234,33 @@ fn no_undefined_logic(
                     }
                 }
             }
-            Command::Block(Block::ForRange(_, _, _, vec)) => {
+            Command::Block(Block::ForRange(_, _, _, vec, a)) => {
                 let mut temp = definitions.clone();
 
                 if !no_undefined_logic(vec, &mut temp, &functions) {
                     return false;
                 }
+
+                for i in get_namedecs(a) {
+                    if !no_undefined_check(&mut definitions, &functions, i) {
+                        return false;
+                    }
+                }
             }
+            Command::Block(Block::While(_, vec, a)) => {
+                let mut temp = definitions.clone();
+
+                if !no_undefined_logic(vec, &mut temp, &functions) {
+                    return false;
+                }
+
+                for i in get_namedecs(a) {
+                    if !no_undefined_check(&mut definitions, &functions, i) {
+                        return false;
+                    }
+                }
+            }
+
             _ => {}
         }
     }
@@ -329,7 +342,7 @@ fn no_forbidden_decs_logic(content: Vec<Command>) -> bool {
                     }
                 }
             }
-            Command::Block(Block::ForRange(iter, _, _, vec)) => {
+            Command::Block(Block::ForRange(iter, _, _, vec, _)) => {
                 if !no_forbidden_decs_check(iter) {
                     return false;
                 }
@@ -338,6 +351,12 @@ fn no_forbidden_decs_logic(content: Vec<Command>) -> bool {
                     return false;
                 }
             }
+            Command::Block(Block::While(_, vec, _)) => {
+                if !no_forbidden_decs_logic(vec) {
+                    return false;
+                }
+            }
+
             _ => {}
         }
     }
@@ -421,7 +440,7 @@ fn no_shadowing_logic(content: Vec<Command>, mut definitions: &mut Vec<String>) 
                     }
                 }
             }
-            Command::Block(Block::ForRange(iter, _, _, vec)) => {
+            Command::Block(Block::ForRange(iter, _, _, vec, _)) => {
                 let mut temp = definitions.clone();
                 if !no_shadowing_check(&mut temp, iter) {
                     return false;
@@ -431,6 +450,14 @@ fn no_shadowing_logic(content: Vec<Command>, mut definitions: &mut Vec<String>) 
                     return false;
                 }
             }
+            Command::Block(Block::While(_, vec, _)) => {
+                let mut temp = definitions.clone();
+
+                if !no_shadowing_logic(vec, &mut temp) {
+                    return false;
+                }
+            }
+
             _ => {}
         }
     }
@@ -522,6 +549,7 @@ mod test {
             Value::Unit,
             Value::Unit,
             for1,
+            Bool::True,
         )));
 
         assert!(!no_shadowing_logic(coms, &mut defs));
@@ -546,6 +574,7 @@ mod test {
             Value::Unit,
             Value::Unit,
             for1,
+            Bool::True,
         )));
 
         assert!(no_shadowing_logic(coms, &mut defs));
@@ -570,6 +599,7 @@ mod test {
             Value::Unit,
             Value::Unit,
             for1,
+            Bool::True,
         )));
 
         assert!(!no_shadowing_logic(coms, &mut defs));
@@ -597,6 +627,7 @@ mod test {
             Value::Unit,
             Value::Unit,
             for2,
+            Bool::True,
         )));
 
         coms.push(Command::Block(Block::ForRange(
@@ -604,6 +635,7 @@ mod test {
             Value::Unit,
             Value::Unit,
             for1,
+            Bool::True,
         )));
 
         assert!(!no_shadowing_logic(coms, &mut defs));

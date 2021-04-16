@@ -411,6 +411,8 @@ fn assignment_tuple_single(input: &str) -> IResult<&str, ast::Command> {
 
 fn for_parse(input: &str) -> IResult<&str, ast::Command> {
     tuple((
+        loop_invariant,
+        space0,
         tag("for"),
         space1,
         variable_single,
@@ -430,10 +432,10 @@ fn for_parse(input: &str) -> IResult<&str, ast::Command> {
         tag("}"),
     ))(input)
     .and_then(
-        |(next_input, (_, _, iter, _, _, _, start, _, _, _, end, _, _, _, comms, _, _))| {
+        |(next_input, (inv, _, _, _, iter, _, _, _, start, _, _, _, end, _, _, _, comms, _, _))| {
             Ok((
                 next_input,
-                ast::Command::Block(ast::Block::ForRange(iter, start, end, comms)),
+                ast::Command::Block(ast::Block::ForRange(iter, start, end, comms, inv)),
             ))
         },
     )
@@ -441,6 +443,8 @@ fn for_parse(input: &str) -> IResult<&str, ast::Command> {
 
 fn while_parse(input: &str) -> IResult<&str, ast::Command> {
     tuple((
+        loop_invariant,
+        space0,
         tag("while"),
         space1,
         boolean::expr,
@@ -451,10 +455,10 @@ fn while_parse(input: &str) -> IResult<&str, ast::Command> {
         multispace0,
         tag("}"),
     ))(input)
-    .and_then(|(next_input, (_, _, c, _, _, _, comms, _, _))| {
+    .and_then(|(next_input, (inv, _, _, _, c, _, _, _, comms, _, _))| {
         Ok((
             next_input,
-            ast::Command::Block(ast::Block::While(*c, comms)),
+            ast::Command::Block(ast::Block::While(*c, comms, inv)),
         ))
     })
 }
@@ -542,7 +546,7 @@ fn single_if(input: &str) -> IResult<&str, ast::Command> {
 }
 
 fn prove_control(input: &str) -> IResult<&str, ast::Command> {
-    alt((assert, assume, loop_invariant))(input)
+    alt((assert, assume))(input)
 }
 
 fn assert(input: &str) -> IResult<&str, ast::Command> {
@@ -569,20 +573,17 @@ fn assume(input: &str) -> IResult<&str, ast::Command> {
     )
 }
 
-fn loop_invariant(input: &str) -> IResult<&str, ast::Command> {
+fn loop_invariant(input: &str) -> IResult<&str, ast::Bool> {
     tuple((
         prove_start,
-        tag("loop_invariant"),
+        tag("invariant"),
         space1,
         boolean::expr,
         newline,
     ))(input)
     .map(|(next_input, res)| {
         let (_, _, _, a, _) = res;
-        (
-            next_input,
-            ast::Command::ProveControl(ast::ProveControl::LoopInvariant(*a)),
-        )
+        (next_input, *a)
     })
 }
 
@@ -1738,9 +1739,9 @@ mod test {
 
     #[test]
     fn loop_invariant1() {
-        assert!(loop_invariant("//%loop_invariant 143 == 12\n").is_ok());
-        assert!(loop_invariant("//%loop_invariant 143 - 4 < 2\n").unwrap().0 == "");
-        assert!(loop_invariant("//%loop_invariant true\n").unwrap().0 == "");
+        assert!(loop_invariant("//%invariant 143 == 12\n").is_ok());
+        assert!(loop_invariant("//%invariant 143 - 4 < 2\n").unwrap().0 == "");
+        assert!(loop_invariant("//%invariant true\n").unwrap().0 == "");
     }
 
     #[test]
@@ -2224,12 +2225,13 @@ mod test {
     #[test]
     fn while_parse1() {
         assert!(
-            while_parse("while i {}").unwrap().1
+            while_parse("//%invariant true\nwhile i {}").unwrap().1
                 == ast::Command::Block(ast::Block::While(
                     ast::Bool::Value(Box::new(ast::Value::Variable(ast::Variable::Named(
                         String::from("i")
                     )))),
-                    Vec::new()
+                    Vec::new(),
+                    ast::Bool::True
                 ))
         );
 
@@ -2242,30 +2244,34 @@ mod test {
         )));
 
         assert_eq!(
-            while_parse("while true {let x: i32 = 1;}").unwrap().1,
-            ast::Command::Block(ast::Block::While(ast::Bool::True, temp))
+            while_parse("//%invariant true\n  while true {let x: i32 = 1;}")
+                .unwrap()
+                .1,
+            ast::Command::Block(ast::Block::While(ast::Bool::True, temp, ast::Bool::True))
         );
     }
 
     #[test]
     fn for_parse1() {
         assert!(
-            for_parse("for i in 0..2 {}").unwrap().1
+            for_parse("//%invariant true\nfor i in 0..2 {}").unwrap().1
                 == ast::Command::Block(ast::Block::ForRange(
                     ast::Variable::Named("i".to_string()),
                     ast::Value::Expr(ast::Expr::Number(0)),
                     ast::Value::Expr(ast::Expr::Number(2)),
-                    Vec::new()
+                    Vec::new(),
+                    ast::Bool::True
                 ))
         );
 
         assert!(
-            for_parse("for i in 0..b {}").unwrap().1
+            for_parse("//%invariant true\n for i in 0..b {}").unwrap().1
                 == ast::Command::Block(ast::Block::ForRange(
                     ast::Variable::Named("i".to_string()),
                     ast::Value::Expr(ast::Expr::Number(0)),
                     ast::Value::Variable(ast::Variable::Named("b".to_string())),
-                    Vec::new()
+                    Vec::new(),
+                    ast::Bool::True
                 ))
         );
 
@@ -2278,12 +2284,15 @@ mod test {
         )));
 
         assert_eq!(
-            for_parse("for i in 0..b {let x: i32 = 1;}").unwrap().1,
+            for_parse("//%invariant true\nfor i in 0..b {let x: i32 = 1;}")
+                .unwrap()
+                .1,
             ast::Command::Block(ast::Block::ForRange(
                 ast::Variable::Named("i".to_string()),
                 ast::Value::Expr(ast::Expr::Number(0)),
                 ast::Value::Variable(ast::Variable::Named("b".to_string())),
-                temp
+                temp,
+                ast::Bool::True
             ))
         );
 
@@ -2303,14 +2312,15 @@ mod test {
         )));
 
         assert!(
-            for_parse("for i in 0..b {let x: i32 = 1; let y: bool = true;}")
+            for_parse("//%invariant true\n  for i in 0..b {let x: i32 = 1; let y: bool = true;}")
                 .unwrap()
                 .1
                 == ast::Command::Block(ast::Block::ForRange(
                     ast::Variable::Named("i".to_string()),
                     ast::Value::Expr(ast::Expr::Number(0)),
                     ast::Value::Variable(ast::Variable::Named("b".to_string())),
-                    temp
+                    temp,
+                    ast::Bool::True
                 ))
         );
     }

@@ -66,9 +66,6 @@ impl fmt::Display for Bool {
 pub enum ProveControl {
     Assert(Bool),
     Assume(Bool),
-    // It may be possible that this is a duplicate of assert in Z3's context?
-    // It also has to be checked later on in validator if it's defined in the loop and error thrown if that's not true
-    LoopInvariant(Bool),
 }
 
 impl fmt::Display for ProveControl {
@@ -76,7 +73,6 @@ impl fmt::Display for ProveControl {
         match self {
             ProveControl::Assert(x) => write!(f, "(assert {})", x),
             ProveControl::Assume(x) => write!(f, "(assume {})", x),
-            ProveControl::LoopInvariant(x) => write!(f, "(loop_invariant {})", x),
         }
     }
 }
@@ -90,7 +86,6 @@ impl ProveControlFuncs for ProveControl {
         match self {
             ProveControl::Assert(a) => a,
             ProveControl::Assume(a) => a,
-            ProveControl::LoopInvariant(a) => a,
         }
     }
 }
@@ -279,9 +274,10 @@ impl fmt::Display for Opcode {
 pub enum Block {
     /// vector of conditions for if/elif, vector of vectors of commands for if/elif, vector of commands for else
     If(Vec<Bool>, Vec<Vec<Command>>, Vec<Command>),
-    /// iterator's name, first range elem, second range elem, commands
-    ForRange(Variable, Value, Value, Vec<Command>),
-    While(Bool, Vec<Command>),
+    /// iterator's name, first range elem, second range elem, commands, invariant
+    ForRange(Variable, Value, Value, Vec<Command>, Bool),
+    /// condition, commands, invariant
+    While(Bool, Vec<Command>, Bool),
 }
 
 impl fmt::Display for Block {
@@ -296,21 +292,25 @@ impl fmt::Display for Block {
                 temp += &format!("se ({:?})", el).to_owned();
                 write!(f, "{}", temp)
             }
-            Block::ForRange(i, a, b, comms) => {
+            Block::ForRange(i, a, b, comms, inv) => {
                 let mut temp = String::new();
                 for i in comms.iter() {
                     temp += &format!("{}", i).to_owned();
                 }
 
-                write!(f, "for {} in range {}..{} (\n{}\n)", i, a, b, temp)
+                write!(
+                    f,
+                    "[{}] for {} in range {}..{} (\n{}\n)",
+                    inv, i, a, b, temp
+                )
             }
-            Block::While(c, comms) => {
+            Block::While(c, comms, inv) => {
                 let mut temp = String::new();
                 for i in comms.iter() {
                     temp += &format!("{}", i).to_owned();
                 }
 
-                write!(f, "while {} (\n{}\n)", c, temp)
+                write!(f, "[{}] while {} (\n{}\n)", inv, c, temp)
             }
         }
     }
@@ -459,7 +459,7 @@ impl AffectedVarGetter for Block {
 
                 a
             }
-            Block::ForRange(var, _, _, vec) => {
+            Block::ForRange(var, _, _, vec, _) => {
                 let mut a = var.get_variables();
 
                 for i in vec {
@@ -469,7 +469,7 @@ impl AffectedVarGetter for Block {
 
                 a
             }
-            Block::While(_, vec) => {
+            Block::While(_, vec, _) => {
                 let mut a = HashSet::new();
                 for i in vec {
                     let t = i.get_affected_variables();
@@ -568,10 +568,11 @@ impl VarGetter for Block {
 
                 a
             }
-            Block::ForRange(var, first, last, vec) => {
+            Block::ForRange(var, first, last, vec, c) => {
                 let mut a = var.get_variables();
                 a.extend(first.get_variables());
                 a.extend(last.get_variables());
+                a.extend(c.get_variables());
 
                 for i in vec {
                     let t = i.get_variables();
@@ -580,8 +581,10 @@ impl VarGetter for Block {
 
                 a
             }
-            Block::While(b, vec) => {
+            Block::While(b, vec, c) => {
                 let mut a = b.get_variables();
+                a.extend(c.get_variables());
+
                 for i in vec {
                     let t = i.get_variables();
                     a.extend(t);
@@ -1070,6 +1073,7 @@ mod test {
                     Value::Unit,
                     false
                 )),],
+                Bool::True
             )
             .get_variables(),
             set![
@@ -1094,6 +1098,7 @@ mod test {
                     Value::Unit,
                     false
                 )),],
+                Bool::True
             )
             .get_variables(),
             set![
