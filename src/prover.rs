@@ -433,15 +433,20 @@ impl Provable for Block {
                     calculated_triples_not.clone()
                 );
 
-                let proved = true;
-
-                let final_list = calculated_triples;
-                //final_list.extend(calculated_triples_not);
-                for (p, _, q) in final_list {
-                    // prove
+                if !prove_triples(calculated_triples) {
+                    return (Bool::True, false);
                 }
 
-                (inv, proved)
+                if !prove_triples(calculated_triples_not) {
+                    return (Bool::True, false);
+                }
+
+                // At this point, just return the real computed {p}
+                //let final_list = calculated_triples;
+                //final_list.extend(calculated_triples_not);
+
+                // TODO: this is probably not going to be inv
+                (inv, true)
             }
             Block::ForRange(_iter, _first, _last, _comms, _inv) => {
                 unimplemented!()
