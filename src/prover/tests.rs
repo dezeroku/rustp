@@ -1152,3 +1152,261 @@ fn prove_while_invariant_fail_1() {
         vec![]
     ));
 }
+
+#[test]
+fn prove_while_postcondition1() {
+    /*
+    //%precondition x>=0 && y>=0
+    //%postcondition q * y + r == x
+    fn remainder_simple(x: i32, y: i32) {
+        let mut q: i32 = 0;
+        let mut r: i32 = x;
+
+        //%invariant q * y + r == x
+        while r >= y {
+            r = r - y;
+            q = q + 1;
+        }
+    }
+    */
+    assert!(prove(
+        Program {
+            content: vec![Function {
+                name: String::from("test"),
+                content: vec![
+                    Command::Assignment(Assignment::Single(
+                        Variable::Named(String::from("q")),
+                        Value::Expr(Expr::Number(0))
+                    )),
+                    Command::Assignment(Assignment::Single(
+                        Variable::Named(String::from("r")),
+                        Value::Variable(Variable::Named(String::from("x")))
+                    )),
+                    Command::Block(Block::While(
+                        Bool::GreaterEqual(
+                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                                "r"
+                            ))))),
+                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                                "y"
+                            )))))
+                        ),
+                        vec![
+                            Command::Assignment(Assignment::Single(
+                                Variable::Named(String::from("r")),
+                                Value::Expr(Expr::Op(
+                                    Box::new(Expr::Value(Box::new(Value::Variable(
+                                        Variable::Named(String::from("r"))
+                                    )))),
+                                    Opcode::Sub,
+                                    Box::new(Expr::Value(Box::new(Value::Variable(
+                                        Variable::Named(String::from("y"))
+                                    )))),
+                                ))
+                            )),
+                            Command::Assignment(Assignment::Single(
+                                Variable::Named(String::from("q")),
+                                Value::Expr(Expr::Op(
+                                    Box::new(Expr::Value(Box::new(Value::Variable(
+                                        Variable::Named(String::from("q"))
+                                    )))),
+                                    Opcode::Add,
+                                    Box::new(Expr::Number(1))
+                                ))
+                            )),
+                        ],
+                        Bool::Equal(
+                            Expr::Op(
+                                Box::new(Expr::Op(
+                                    Box::new(Expr::Value(Box::new(Value::Variable(
+                                        Variable::Named(String::from("q"))
+                                    )))),
+                                    Opcode::Mul,
+                                    Box::new(Expr::Value(Box::new(Value::Variable(
+                                        Variable::Named(String::from("y"))
+                                    ))))
+                                )),
+                                Opcode::Add,
+                                Box::new(Expr::Value(Box::new(Value::Variable(Variable::Named(
+                                    String::from("r")
+                                )))))
+                            ),
+                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                                "x"
+                            )))))
+                        )
+                    ))
+                ],
+                input: vec![],
+                output: Type::Unit,
+                precondition: Bool::And(
+                    Box::new(Bool::GreaterEqual(
+                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                            "x"
+                        ))))),
+                        Expr::Number(0)
+                    )),
+                    Box::new(Bool::GreaterEqual(
+                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                            "y"
+                        ))))),
+                        Expr::Number(0)
+                    ))
+                ),
+                postcondition: Bool::Equal(
+                    Expr::Op(
+                        Box::new(Expr::Op(
+                            Box::new(Expr::Value(Box::new(Value::Variable(Variable::Named(
+                                String::from("q")
+                            ))))),
+                            Opcode::Mul,
+                            Box::new(Expr::Value(Box::new(Value::Variable(Variable::Named(
+                                String::from("y")
+                            )))))
+                        )),
+                        Opcode::Add,
+                        Box::new(Expr::Value(Box::new(Value::Variable(Variable::Named(
+                            String::from("r")
+                        )))))
+                    ),
+                    Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                        "x"
+                    )))))
+                ),
+                return_value: Value::Unit
+            }]
+        },
+        vec![]
+    ));
+}
+
+#[test]
+fn prove_while_postcondition_fail1() {
+    /*
+    //%precondition x>=0 && y>=0
+    //%postcondition q * y + r == x + 1
+    fn remainder_simple(x: i32, y: i32) {
+        let mut q: i32 = 0;
+        let mut r: i32 = x;
+
+        //%invariant q * y + r == x
+        while r >= y {
+            r = r - y;
+            q = q + 1;
+        }
+    }
+    */
+    assert!(!prove(
+        Program {
+            content: vec![Function {
+                name: String::from("test"),
+                content: vec![
+                    Command::Assignment(Assignment::Single(
+                        Variable::Named(String::from("q")),
+                        Value::Expr(Expr::Number(0))
+                    )),
+                    Command::Assignment(Assignment::Single(
+                        Variable::Named(String::from("r")),
+                        Value::Variable(Variable::Named(String::from("x")))
+                    )),
+                    Command::Block(Block::While(
+                        Bool::GreaterEqual(
+                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                                "r"
+                            ))))),
+                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                                "y"
+                            )))))
+                        ),
+                        vec![
+                            Command::Assignment(Assignment::Single(
+                                Variable::Named(String::from("r")),
+                                Value::Expr(Expr::Op(
+                                    Box::new(Expr::Value(Box::new(Value::Variable(
+                                        Variable::Named(String::from("r"))
+                                    )))),
+                                    Opcode::Sub,
+                                    Box::new(Expr::Value(Box::new(Value::Variable(
+                                        Variable::Named(String::from("y"))
+                                    )))),
+                                ))
+                            )),
+                            Command::Assignment(Assignment::Single(
+                                Variable::Named(String::from("q")),
+                                Value::Expr(Expr::Op(
+                                    Box::new(Expr::Value(Box::new(Value::Variable(
+                                        Variable::Named(String::from("q"))
+                                    )))),
+                                    Opcode::Add,
+                                    Box::new(Expr::Number(1))
+                                ))
+                            )),
+                        ],
+                        Bool::Equal(
+                            Expr::Op(
+                                Box::new(Expr::Op(
+                                    Box::new(Expr::Value(Box::new(Value::Variable(
+                                        Variable::Named(String::from("q"))
+                                    )))),
+                                    Opcode::Mul,
+                                    Box::new(Expr::Value(Box::new(Value::Variable(
+                                        Variable::Named(String::from("y"))
+                                    ))))
+                                )),
+                                Opcode::Add,
+                                Box::new(Expr::Value(Box::new(Value::Variable(Variable::Named(
+                                    String::from("r")
+                                )))))
+                            ),
+                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                                "x"
+                            )))))
+                        )
+                    ))
+                ],
+                input: vec![],
+                output: Type::Unit,
+                precondition: Bool::And(
+                    Box::new(Bool::GreaterEqual(
+                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                            "x"
+                        ))))),
+                        Expr::Number(0)
+                    )),
+                    Box::new(Bool::GreaterEqual(
+                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                            "y"
+                        ))))),
+                        Expr::Number(0)
+                    ))
+                ),
+                postcondition: Bool::Equal(
+                    Expr::Op(
+                        Box::new(Expr::Op(
+                            Box::new(Expr::Value(Box::new(Value::Variable(Variable::Named(
+                                String::from("q")
+                            ))))),
+                            Opcode::Mul,
+                            Box::new(Expr::Value(Box::new(Value::Variable(Variable::Named(
+                                String::from("y")
+                            )))))
+                        )),
+                        Opcode::Add,
+                        Box::new(Expr::Value(Box::new(Value::Variable(Variable::Named(
+                            String::from("r")
+                        )))))
+                    ),
+                    Expr::Op(
+                        Box::new(Expr::Value(Box::new(Value::Variable(Variable::Named(
+                            String::from("x")
+                        ))))),
+                        Opcode::Add,
+                        Box::new(Expr::Number(1))
+                    )
+                ),
+                return_value: Value::Unit
+            }]
+        },
+        vec![]
+    ));
+}
