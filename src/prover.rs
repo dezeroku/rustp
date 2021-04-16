@@ -2,6 +2,42 @@ use crate::ast::*;
 use log;
 use z3;
 
+fn define_return_value(output: Type, return_value: Value) -> Command {
+    match output {
+        Type::Array(_, _) => Command::Binding(Binding::Assignment(
+            Variable::Named(String::from("return_value")),
+            output,
+            return_value,
+            false,
+        )),
+        Type::Bool => Command::Binding(Binding::Assignment(
+            Variable::Named(String::from("return_value")),
+            output,
+            return_value,
+            false,
+        )),
+        Type::I32 => Command::Binding(Binding::Assignment(
+            Variable::Named(String::from("return_value")),
+            output,
+            return_value,
+            false,
+        )),
+        Type::Reference(_x) => {
+            unimplemented!()
+        }
+        Type::ReferenceMutable(_x) => {
+            unimplemented!()
+        }
+        Type::Tuple(_) => Command::Binding(Binding::Assignment(
+            Variable::Named(String::from("return_value")),
+            output,
+            return_value,
+            false,
+        )),
+        Type::Unit => Command::Noop,
+    }
+}
+
 /// Return function with pre/postconditions properly wrapped, so it's ready to be proved
 fn wrap_function(f: Function) -> Function {
     let mut to_prove = f.clone();
@@ -14,14 +50,9 @@ fn wrap_function(f: Function) -> Function {
     // Put the noop at the end so loops are in bounds, should be cleaned up in the end, similar to the push of noop above
     temp.push(Command::Noop);
 
-    // TODO: Handle other return types
-    // Assign the value being returned to the ret'val variable
-    temp.push(Command::Binding(Binding::Assignment(
-        Variable::Named(String::from("return_value")),
-        f.output,
-        f.return_value,
-        false,
-    )));
+    // Assign the value being returned to the return_value variable
+    // TODO: maybe consider renaming it to ret'val or something like that?
+    temp.push(define_return_value(f.output, f.return_value));
 
     // Set postcondition as last assert
     temp.push(Command::ProveControl(ProveControl::Assert(
@@ -618,6 +649,62 @@ mod test {
                     precondition: Bool::True,
                     postcondition: Bool::True,
                     return_value: Value::Unit
+                }]
+            },
+            vec![]
+        ));
+    }
+
+    #[test]
+    fn prove_return_value1() {
+        assert!(prove(
+            Program {
+                content: vec![Function {
+                    name: String::from("test"),
+                    content: vec![Command::Binding(Binding::Assignment(
+                        Variable::Named(String::from("x")),
+                        Type::I32,
+                        Value::Expr(Expr::Number(1)),
+                        false
+                    ))],
+                    input: vec![],
+                    output: Type::I32,
+                    precondition: Bool::True,
+                    postcondition: Bool::Equal(
+                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                            "return_value"
+                        ))))),
+                        Expr::Number(1)
+                    ),
+                    return_value: Value::Variable(Variable::Named(String::from("x")))
+                }]
+            },
+            vec![]
+        ));
+    }
+
+    #[test]
+    fn prove_return_value_fail1() {
+        assert!(!prove(
+            Program {
+                content: vec![Function {
+                    name: String::from("test"),
+                    content: vec![Command::Binding(Binding::Assignment(
+                        Variable::Named(String::from("x")),
+                        Type::I32,
+                        Value::Expr(Expr::Number(1)),
+                        false
+                    ))],
+                    input: vec![],
+                    output: Type::I32,
+                    precondition: Bool::True,
+                    postcondition: Bool::Equal(
+                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                            "return_value"
+                        ))))),
+                        Expr::Number(2)
+                    ),
+                    return_value: Value::Variable(Variable::Named(String::from("x")))
                 }]
             },
             vec![]
