@@ -38,20 +38,41 @@ fn parse(filename: &str) -> ast::Program {
                 tree
             } else {
                 println!("Not the whole input was parsed.");
-                println!("The part that left is:\n{}", rest);
+                println!("The part that left is:\n");
+                let mut t: Vec<&str> = rest.lines().rev().collect();
+
+                for _ in 0..20 {
+                    if !t.is_empty() {
+                        println!("{}", t.pop().unwrap());
+                    }
+                }
                 std::process::exit(3);
             }
         }
         Err(nom::Err::Error(a)) => {
             println!("Failed to parse!");
             println!("Tag: {:?}", a.code);
-            println!("Unmatched input:\n {}", a.input);
+            let mut t: Vec<&str> = a.input.lines().rev().collect();
+
+            println!("Unmatched input:\n");
+            for _ in 0..20 {
+                if !t.is_empty() {
+                    println!("{}", t.pop().unwrap());
+                }
+            }
             std::process::exit(2);
         }
         Err(nom::Err::Failure(a)) => {
             println!("Failed to parse!");
             println!("Tag: {:?}", a.code);
-            println!("Unmatched input:\n {}", a.input);
+            let mut t: Vec<&str> = a.input.lines().rev().collect();
+
+            println!("Unmatched input:\n");
+            for _ in 0..20 {
+                if !t.is_empty() {
+                    println!("{}", t.pop().unwrap());
+                }
+            }
             std::process::exit(2);
         }
         Err(nom::Err::Incomplete(_)) => {
