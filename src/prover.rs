@@ -2,6 +2,9 @@ use crate::ast::*;
 use log;
 use z3;
 
+#[cfg(test)]
+mod tests;
+
 fn define_return_value(output: Type, return_value: Value) -> Command {
     match output {
         Type::Array(_, _) => Command::Binding(Binding::Assignment(
@@ -99,7 +102,11 @@ fn create_triples(commands: Vec<Command>, precondition: Bool) -> Vec<(Bool, Vec<
 }
 
 /// Actually compute the "real" postcondition that should be proven, based on the code
-fn calculate_triples(triples: Vec<(Bool, Vec<Command>, Bool)>) -> Vec<(Bool, Vec<Command>, Bool)> {
+/// The return type is (<p, comms, q>, prove_fail)
+/// as some proving can already happen at this stage (loops)
+fn calculate_triples(
+    triples: Vec<(Bool, Vec<Command>, Bool)>,
+) -> (Vec<(Bool, Vec<Command>, Bool)>, bool) {
     let mut triples_calculated = Vec::new();
 
     // TODO: Consider also listing the original post, to make user output easier
@@ -125,7 +132,11 @@ fn calculate_triples(triples: Vec<(Bool, Vec<Command>, Bool)>) -> Vec<(Bool, Vec
                 Command::ProveControl(_) => {}
                 _ => {
                     log::trace!("{}", comm.clone());
-                    q = comm.get_pre(q.clone(), p.clone());
+                    let (_q, t) = comm.get_pre(q.clone(), p.clone());
+                    if !t {
+                        return (Vec::new(), false);
+                    }
+                    q = _q;
                     log::trace!("{}", q);
                 }
             }
@@ -149,7 +160,7 @@ fn calculate_triples(triples: Vec<(Bool, Vec<Command>, Bool)>) -> Vec<(Bool, Vec
         }
     }
 
-    to_return
+    (to_return, true)
 }
 
 /// Prove the triples
@@ -223,7 +234,11 @@ pub fn prove(input: Program, funcs_to_prove: Vec<String>) -> bool {
 
         let triples = create_triples(wrapped_func.content, wrapped_func.precondition);
 
-        let calculated_triples = calculate_triples(triples);
+        let (calculated_triples, t) = calculate_triples(triples);
+        if !t {
+            log::info!("Failed to prove function: {}", f_name);
+            return false;
+        }
 
         let t = prove_triples(calculated_triples);
 
@@ -240,29 +255,29 @@ pub fn prove(input: Program, funcs_to_prove: Vec<String>) -> bool {
 
 trait Provable {
     /// Find the P for {P} S {Q} to prove
-    fn get_pre(self, q: Bool, p: Bool) -> Bool;
+    fn get_pre(self, q: Bool, p: Bool) -> (Bool, bool);
 }
 
 impl Provable for Command {
-    fn get_pre(self, q: Bool, p: Bool) -> Bool {
+    fn get_pre(self, q: Bool, p: Bool) -> (Bool, bool) {
         match self {
             Command::Binding(x) => x.get_pre(q, p),
             Command::Assignment(x) => x.get_pre(q, p),
             Command::ProveControl(x) => x.get_pre(q, p),
             Command::Block(x) => x.get_pre(q, p),
-            Command::Noop => q,
+            Command::Noop => (q, true),
         }
     }
 }
 
 impl Provable for Binding {
-    fn get_pre(self, q: Bool, _p: Bool) -> Bool {
+    fn get_pre(self, q: Bool, _p: Bool) -> (Bool, bool) {
         match self {
-            Binding::Declaration(_, _, _) => q,
+            Binding::Declaration(_, _, _) => (q, true),
 
             Binding::Assignment(var, _, val, _) => {
                 // Swap all `var` occurences with the `val` in the condition
-                q.swap(var, val)
+                (q.swap(var, val), true)
             }
             Binding::Tuple(_vec) => {
                 unimplemented!()
@@ -272,31 +287,35 @@ impl Provable for Binding {
 }
 
 impl Provable for Assignment {
-    fn get_pre(self, q: Bool, p: Bool) -> Bool {
+    fn get_pre(self, q: Bool, p: Bool) -> (Bool, bool) {
         match self {
             Assignment::Tuple(vec) => {
                 let mut t = q;
                 for i in vec {
-                    t = i.get_pre(t, p.clone());
+                    let (_t, l) = i.get_pre(t, p.clone());
+                    if !l {
+                        return (Bool::True, false);
+                    }
+                    t = _t;
                 }
-                t
+                (t, true)
             }
-            Assignment::Single(var, val) => q.swap(var, val),
+            Assignment::Single(var, val) => (q.swap(var, val), true),
         }
     }
 }
 
 impl Provable for ProveControl {
-    fn get_pre(self, _q: Bool, _p: Bool) -> Bool {
+    fn get_pre(self, _q: Bool, _p: Bool) -> (Bool, bool) {
         match self {
-            ProveControl::Assert(a) => a,
-            ProveControl::Assume(a) => a,
+            ProveControl::Assert(a) => (a, true),
+            ProveControl::Assume(a) => (a, true),
         }
     }
 }
 
 impl Provable for Block {
-    fn get_pre(self, q: Bool, _p: Bool) -> Bool {
+    fn get_pre(self, q: Bool, _p: Bool) -> (Bool, bool) {
         match self {
             Block::If(mut ifs, mut comms, el) => {
                 // Calculate p for all the possible choices
@@ -321,7 +340,11 @@ impl Provable for Block {
                     // should it have some local context?
                     let triples = create_triples(c, q.clone());
                     log::trace!("triples: {:?}", triples.clone());
-                    let mut calculated_triples = calculate_triples(triples);
+                    let (mut calculated_triples, t) = calculate_triples(triples);
+                    if !t {
+                        return (Bool::True, false);
+                    }
+
                     log::trace!("calculated_triples: {:?}", calculated_triples.clone());
 
                     let (_, _, f) = calculated_triples.pop().unwrap();
@@ -367,10 +390,58 @@ impl Provable for Block {
                     );
                 }
 
-                to_return
+                (to_return, true)
             }
-            Block::While(_cond, _comms, _inv) => {
-                unimplemented!()
+            Block::While(cond, mut comms, inv) => {
+                // TODO: this wasn't tested yet
+                let p = inv.clone();
+                let pre = Bool::And(Box::new(inv.clone()), Box::new(cond.clone()));
+
+                // First check that the invariant works, so inv && cond -> inv
+                // This is pretty stupid, but hey...
+                comms.push(Command::Noop);
+                comms.push(Command::ProveControl(ProveControl::Assert(inv.clone())));
+
+                let triples = create_triples(comms.clone(), pre);
+                log::trace!("triples: {:?}", triples.clone());
+                let (mut calculated_triples, t) = calculate_triples(triples.clone());
+                if !t {
+                    return (Bool::True, false);
+                }
+
+                log::trace!("calculated_triples: {:?}", calculated_triples.clone());
+
+                // Also check that not condition && invariant => post
+                let pre_not = Bool::And(
+                    Box::new(inv.clone()),
+                    Box::new(Bool::Not(Box::new(cond.clone()))),
+                );
+
+                // Remove last assert and change it with the proper post
+                // These implications should be tested here it seems
+                comms.pop();
+                comms.push(Command::ProveControl(ProveControl::Assert(q.clone())));
+
+                let triples_not = create_triples(comms.clone(), pre_not);
+                log::trace!("triples_not: {:?}", triples_not.clone());
+                let (mut calculated_triples_not, t) = calculate_triples(triples);
+                if !t {
+                    return (Bool::True, false);
+                }
+                log::trace!(
+                    "calculated_triples_not: {:?}",
+                    calculated_triples_not.clone()
+                );
+
+                let proved = true;
+
+                let final_list = calculated_triples;
+                //final_list.extend(calculated_triples_not);
+                for (p, _, q) in final_list {
+                    // prove
+                }
+
+                (inv, proved)
             }
             Block::ForRange(_iter, _first, _last, _comms, _inv) => {
                 unimplemented!()
@@ -529,967 +600,5 @@ impl ProvableCommand for Command {
                 (false, z3::ast::Bool::from_bool(&ctx, true))
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn prove_empty1() {
-        assert!(prove(
-            Program {
-                content: vec![Function {
-                    name: String::from("test"),
-                    content: vec![],
-                    input: vec![],
-                    output: Type::Unit,
-                    precondition: Bool::True,
-                    postcondition: Bool::True,
-                    return_value: Value::Unit
-                }]
-            },
-            vec![]
-        ));
-    }
-
-    #[test]
-    fn prove_1() {
-        assert!(prove(
-            Program {
-                content: vec![Function {
-                    name: String::from("test"),
-                    content: vec![
-                        Command::Binding(Binding::Assignment(
-                            Variable::Named(String::from("x")),
-                            Type::I32,
-                            Value::Expr(Expr::Number(1)),
-                            false
-                        )),
-                        Command::ProveControl(ProveControl::Assert(Bool::Equal(
-                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                                "x"
-                            ))))),
-                            Expr::Number(1)
-                        )))
-                    ],
-                    input: vec![],
-                    output: Type::Unit,
-                    precondition: Bool::True,
-                    postcondition: Bool::True,
-                    return_value: Value::Unit
-                }]
-            },
-            vec![]
-        ));
-    }
-
-    #[test]
-    fn prove_2() {
-        assert!(prove(
-            Program {
-                content: vec![Function {
-                    name: String::from("test"),
-                    content: vec![
-                        Command::Binding(Binding::Assignment(
-                            Variable::Named(String::from("x")),
-                            Type::I32,
-                            Value::Expr(Expr::Number(1)),
-                            false
-                        )),
-                        Command::ProveControl(ProveControl::Assert(Bool::Equal(
-                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                                "x"
-                            ))))),
-                            Expr::Number(1)
-                        ))),
-                        Command::Binding(Binding::Assignment(
-                            Variable::Named(String::from("x")),
-                            Type::I32,
-                            Value::Expr(Expr::Number(2)),
-                            false
-                        )),
-                        Command::ProveControl(ProveControl::Assert(Bool::Equal(
-                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                                "x"
-                            ))))),
-                            Expr::Number(2)
-                        )))
-                    ],
-                    input: vec![],
-                    output: Type::Unit,
-                    precondition: Bool::True,
-                    postcondition: Bool::True,
-                    return_value: Value::Unit
-                }]
-            },
-            vec![]
-        ));
-    }
-
-    #[test]
-    fn prove_3() {
-        assert!(prove(
-            Program {
-                content: vec![Function {
-                    name: String::from("test"),
-                    content: vec![
-                        Command::Binding(Binding::Assignment(
-                            Variable::Named(String::from("x")),
-                            Type::I32,
-                            Value::Expr(Expr::Number(1)),
-                            false
-                        )),
-                        Command::ProveControl(ProveControl::Assert(Bool::Equal(
-                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                                "x"
-                            ))))),
-                            Expr::Number(1)
-                        ))),
-                        Command::Binding(Binding::Assignment(
-                            Variable::Named(String::from("x")),
-                            Type::I32,
-                            Value::Expr(Expr::Number(2)),
-                            false
-                        )),
-                        Command::ProveControl(ProveControl::Assert(Bool::Equal(
-                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                                "x"
-                            ))))),
-                            Expr::Number(2)
-                        ))),
-                        Command::Binding(Binding::Assignment(
-                            Variable::Named(String::from("x")),
-                            Type::I32,
-                            Value::Expr(Expr::Op(
-                                Box::new(Expr::Value(Box::new(Value::Variable(Variable::Named(
-                                    String::from("x")
-                                ))))),
-                                Opcode::Add,
-                                Box::new(Expr::Number(3))
-                            )),
-                            false
-                        )),
-                        Command::ProveControl(ProveControl::Assert(Bool::Equal(
-                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                                "x"
-                            ))))),
-                            Expr::Number(5)
-                        ))),
-                        Command::Binding(Binding::Assignment(
-                            Variable::Named(String::from("x")),
-                            Type::I32,
-                            Value::Expr(Expr::Number(7)),
-                            false
-                        )),
-                        Command::ProveControl(ProveControl::Assert(Bool::Equal(
-                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                                "x"
-                            ))))),
-                            Expr::Number(7)
-                        ))),
-                    ],
-                    input: vec![],
-                    output: Type::Unit,
-                    precondition: Bool::True,
-                    postcondition: Bool::True,
-                    return_value: Value::Unit
-                }]
-            },
-            vec![]
-        ));
-    }
-
-    #[test]
-    fn prove_fail_1() {
-        assert!(!prove(
-            Program {
-                content: vec![Function {
-                    name: String::from("test"),
-                    content: vec![
-                        Command::Binding(Binding::Assignment(
-                            Variable::Named(String::from("x")),
-                            Type::I32,
-                            Value::Expr(Expr::Number(1)),
-                            false
-                        )),
-                        Command::ProveControl(ProveControl::Assert(Bool::Equal(
-                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                                "x"
-                            ))))),
-                            Expr::Number(2)
-                        )))
-                    ],
-                    input: vec![],
-                    output: Type::Unit,
-                    precondition: Bool::True,
-                    postcondition: Bool::True,
-                    return_value: Value::Unit
-                }]
-            },
-            vec![]
-        ));
-    }
-
-    #[test]
-    fn prove_return_value1() {
-        assert!(prove(
-            Program {
-                content: vec![Function {
-                    name: String::from("test"),
-                    content: vec![Command::Binding(Binding::Assignment(
-                        Variable::Named(String::from("x")),
-                        Type::I32,
-                        Value::Expr(Expr::Number(1)),
-                        false
-                    ))],
-                    input: vec![],
-                    output: Type::I32,
-                    precondition: Bool::True,
-                    postcondition: Bool::Equal(
-                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                            "return_value"
-                        ))))),
-                        Expr::Number(1)
-                    ),
-                    return_value: Value::Variable(Variable::Named(String::from("x")))
-                }]
-            },
-            vec![]
-        ));
-    }
-
-    #[test]
-    fn prove_return_value_fail1() {
-        assert!(!prove(
-            Program {
-                content: vec![Function {
-                    name: String::from("test"),
-                    content: vec![Command::Binding(Binding::Assignment(
-                        Variable::Named(String::from("x")),
-                        Type::I32,
-                        Value::Expr(Expr::Number(1)),
-                        false
-                    ))],
-                    input: vec![],
-                    output: Type::I32,
-                    precondition: Bool::True,
-                    postcondition: Bool::Equal(
-                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                            "return_value"
-                        ))))),
-                        Expr::Number(2)
-                    ),
-                    return_value: Value::Variable(Variable::Named(String::from("x")))
-                }]
-            },
-            vec![]
-        ));
-    }
-
-    #[test]
-    fn prove_postcondition1() {
-        assert!(prove(
-            Program {
-                content: vec![Function {
-                    name: String::from("test"),
-                    content: vec![Command::Binding(Binding::Assignment(
-                        Variable::Named(String::from("x")),
-                        Type::I32,
-                        Value::Expr(Expr::Number(1)),
-                        false
-                    ))],
-                    input: vec![],
-                    output: Type::Unit,
-                    precondition: Bool::True,
-                    postcondition: Bool::Equal(
-                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                            "x"
-                        ))))),
-                        Expr::Number(1)
-                    ),
-                    return_value: Value::Unit
-                }]
-            },
-            vec![]
-        ));
-    }
-
-    #[test]
-    fn prove_postcondition2() {
-        assert!(prove(
-            Program {
-                content: vec![Function {
-                    name: String::from("test"),
-                    content: vec![Command::Binding(Binding::Assignment(
-                        Variable::Named(String::from("x")),
-                        Type::I32,
-                        Value::Expr(Expr::Number(3)),
-                        false
-                    ))],
-                    input: vec![],
-                    output: Type::Unit,
-                    precondition: Bool::Equal(
-                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                            "x"
-                        ))))),
-                        Expr::Number(2)
-                    ),
-                    postcondition: Bool::Equal(
-                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                            "x"
-                        ))))),
-                        Expr::Number(3)
-                    ),
-                    return_value: Value::Unit
-                }]
-            },
-            vec![]
-        ));
-    }
-
-    #[test]
-    fn prove_postcondition_fail1() {
-        assert!(!prove(
-            Program {
-                content: vec![Function {
-                    name: String::from("test"),
-                    content: vec![Command::Binding(Binding::Assignment(
-                        Variable::Named(String::from("x")),
-                        Type::I32,
-                        Value::Expr(Expr::Number(1)),
-                        false
-                    ))],
-                    input: vec![],
-                    output: Type::Unit,
-                    precondition: Bool::True,
-                    postcondition: Bool::Equal(
-                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                            "x"
-                        ))))),
-                        Expr::Number(2)
-                    ),
-                    return_value: Value::Unit
-                }]
-            },
-            vec![]
-        ));
-    }
-
-    #[test]
-    fn prove_postcondition_fail2() {
-        assert!(!prove(
-            Program {
-                content: vec![Function {
-                    name: String::from("test"),
-                    content: vec![Command::Binding(Binding::Assignment(
-                        Variable::Named(String::from("x")),
-                        Type::I32,
-                        Value::Expr(Expr::Number(2)),
-                        false
-                    ))],
-                    input: vec![],
-                    output: Type::Unit,
-                    precondition: Bool::Equal(
-                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                            "x"
-                        ))))),
-                        Expr::Number(2)
-                    ),
-                    postcondition: Bool::Equal(
-                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                            "x"
-                        ))))),
-                        Expr::Number(3)
-                    ),
-                    return_value: Value::Unit
-                }]
-            },
-            vec![]
-        ));
-    }
-
-    #[test]
-    fn prove_postcondition_fail3() {
-        assert!(!prove(
-            Program {
-                content: vec![Function {
-                    name: String::from("test"),
-                    content: vec![],
-                    input: vec![],
-                    output: Type::Unit,
-                    precondition: Bool::Equal(
-                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                            "x"
-                        ))))),
-                        Expr::Number(2)
-                    ),
-                    postcondition: Bool::Equal(
-                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                            "x"
-                        ))))),
-                        Expr::Number(3)
-                    ),
-                    return_value: Value::Unit
-                }]
-            },
-            vec![]
-        ));
-    }
-
-    #[test]
-    fn prove_old1() {
-        assert!(prove(
-            Program {
-                content: vec![Function {
-                    name: String::from("test"),
-                    content: vec![Command::Binding(Binding::Assignment(
-                        Variable::Named(String::from("x")),
-                        Type::I32,
-                        Value::Expr(Expr::Number(3)),
-                        false
-                    ))],
-                    input: vec![],
-                    output: Type::Unit,
-                    precondition: Bool::And(
-                        Box::new(Bool::Equal(
-                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                                "x"
-                            ))))),
-                            Expr::Number(2)
-                        )),
-                        Box::new(Bool::Equal(
-                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                                "x"
-                            ))))),
-                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                                "x'old"
-                            ))))),
-                        ))
-                    ),
-                    postcondition: Bool::Equal(
-                        Expr::Op(
-                            Box::new(Expr::Value(Box::new(Value::Variable(Variable::Named(
-                                String::from("x'old")
-                            ))))),
-                            Opcode::Add,
-                            Box::new(Expr::Number(1))
-                        ),
-                        Expr::Number(3)
-                    ),
-                    return_value: Value::Unit
-                }]
-            },
-            vec![]
-        ));
-    }
-
-    #[test]
-    fn prove_old2() {
-        assert!(prove(
-            Program {
-                content: vec![Function {
-                    name: String::from("test"),
-                    content: vec![Command::Binding(Binding::Assignment(
-                        Variable::Named(String::from("x")),
-                        Type::I32,
-                        Value::Expr(Expr::Number(3)),
-                        false
-                    ))],
-                    input: vec![],
-                    output: Type::Unit,
-                    precondition: Bool::And(
-                        Box::new(Bool::Equal(
-                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                                "x"
-                            ))))),
-                            Expr::Number(2)
-                        )),
-                        Box::new(Bool::Equal(
-                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                                "x"
-                            ))))),
-                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                                "x'old"
-                            ))))),
-                        ))
-                    ),
-                    postcondition: Bool::Equal(
-                        Expr::Op(
-                            Box::new(Expr::Value(Box::new(Value::Variable(Variable::Named(
-                                String::from("x'old")
-                            ))))),
-                            Opcode::Add,
-                            Box::new(Expr::Number(1))
-                        ),
-                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                            "x"
-                        )))))
-                    ),
-                    return_value: Value::Unit
-                }]
-            },
-            vec![]
-        ));
-    }
-
-    #[test]
-    fn prove_old_fail1() {
-        assert!(!prove(
-            Program {
-                content: vec![Function {
-                    name: String::from("test"),
-                    content: vec![Command::Binding(Binding::Assignment(
-                        Variable::Named(String::from("x")),
-                        Type::I32,
-                        Value::Expr(Expr::Number(3)),
-                        false
-                    ))],
-                    input: vec![],
-                    output: Type::Unit,
-                    precondition: Bool::And(
-                        Box::new(Bool::Equal(
-                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                                "x"
-                            ))))),
-                            Expr::Number(2)
-                        )),
-                        Box::new(Bool::Equal(
-                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                                "x"
-                            ))))),
-                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                                "x'old"
-                            ))))),
-                        ))
-                    ),
-                    postcondition: Bool::Equal(
-                        Expr::Op(
-                            Box::new(Expr::Value(Box::new(Value::Variable(Variable::Named(
-                                String::from("x'old")
-                            ))))),
-                            Opcode::Add,
-                            Box::new(Expr::Number(1))
-                        ),
-                        Expr::Number(4)
-                    ),
-                    return_value: Value::Unit
-                }]
-            },
-            vec![]
-        ));
-    }
-
-    #[test]
-    fn prove_if1() {
-        assert!(prove(
-            Program {
-                content: vec![Function {
-                    name: String::from("test"),
-                    content: vec![Command::Block(Block::If(
-                        vec![Bool::True],
-                        vec![vec![Command::Binding(Binding::Assignment(
-                            Variable::Named(String::from("x")),
-                            Type::I32,
-                            Value::Expr(Expr::Number(3)),
-                            false
-                        ))]],
-                        vec![]
-                    ))],
-                    input: vec![],
-                    output: Type::Unit,
-                    precondition: Bool::And(
-                        Box::new(Bool::Equal(
-                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                                "x"
-                            ))))),
-                            Expr::Number(1)
-                        )),
-                        Box::new(Bool::Equal(
-                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                                "x"
-                            ))))),
-                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                                "x'old"
-                            ))))),
-                        ))
-                    ),
-                    postcondition: Bool::Equal(
-                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                            "x"
-                        ))))),
-                        Expr::Number(3)
-                    ),
-
-                    return_value: Value::Unit
-                }]
-            },
-            vec![]
-        ));
-    }
-
-    #[test]
-    fn prove_if2() {
-        assert!(prove(
-            Program {
-                content: vec![Function {
-                    name: String::from("test"),
-                    content: vec![Command::Block(Block::If(
-                        vec![Bool::True],
-                        vec![vec![Command::Binding(Binding::Assignment(
-                            Variable::Named(String::from("x")),
-                            Type::I32,
-                            Value::Expr(Expr::Number(3)),
-                            false
-                        ))]],
-                        vec![Command::Binding(Binding::Assignment(
-                            Variable::Named(String::from("x")),
-                            Type::I32,
-                            Value::Expr(Expr::Number(1)),
-                            false
-                        ))]
-                    ))],
-                    input: vec![],
-                    output: Type::Unit,
-                    precondition: Bool::And(
-                        Box::new(Bool::Equal(
-                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                                "x"
-                            ))))),
-                            Expr::Number(1)
-                        )),
-                        Box::new(Bool::Equal(
-                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                                "x"
-                            ))))),
-                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                                "x'old"
-                            ))))),
-                        ))
-                    ),
-                    postcondition: Bool::Equal(
-                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                            "x"
-                        ))))),
-                        Expr::Number(3)
-                    ),
-
-                    return_value: Value::Unit
-                }]
-            },
-            vec![]
-        ));
-    }
-
-    #[test]
-    fn prove_if_fail1() {
-        assert!(!prove(
-            Program {
-                content: vec![Function {
-                    name: String::from("test"),
-                    content: vec![Command::Block(Block::If(
-                        vec![Bool::False],
-                        vec![vec![Command::Binding(Binding::Assignment(
-                            Variable::Named(String::from("x")),
-                            Type::I32,
-                            Value::Expr(Expr::Number(3)),
-                            false
-                        ))]],
-                        vec![Command::Binding(Binding::Assignment(
-                            Variable::Named(String::from("x")),
-                            Type::I32,
-                            Value::Expr(Expr::Number(1)),
-                            false
-                        ))]
-                    ))],
-                    input: vec![],
-                    output: Type::Unit,
-                    precondition: Bool::And(
-                        Box::new(Bool::Equal(
-                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                                "x"
-                            ))))),
-                            Expr::Number(1)
-                        )),
-                        Box::new(Bool::Equal(
-                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                                "x"
-                            ))))),
-                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                                "x'old"
-                            ))))),
-                        ))
-                    ),
-                    postcondition: Bool::Equal(
-                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                            "x"
-                        ))))),
-                        Expr::Number(3)
-                    ),
-
-                    return_value: Value::Unit
-                }]
-            },
-            vec![]
-        ));
-    }
-
-    #[test]
-    fn prove_if_nested1() {
-        assert!(prove(
-            Program {
-                content: vec![Function {
-                    name: String::from("test"),
-                    content: vec![Command::Block(Block::If(
-                        vec![Bool::True],
-                        vec![vec![Command::Block(Block::If(
-                            vec![Bool::True],
-                            vec![vec![Command::Binding(Binding::Assignment(
-                                Variable::Named(String::from("x")),
-                                Type::I32,
-                                Value::Expr(Expr::Number(3)),
-                                false
-                            ))]],
-                            vec![Command::Binding(Binding::Assignment(
-                                Variable::Named(String::from("x")),
-                                Type::I32,
-                                Value::Expr(Expr::Number(1)),
-                                false
-                            ))]
-                        ))]],
-                        vec![Command::Binding(Binding::Assignment(
-                            Variable::Named(String::from("x")),
-                            Type::I32,
-                            Value::Expr(Expr::Number(1)),
-                            false
-                        ))]
-                    ))],
-                    input: vec![],
-                    output: Type::Unit,
-                    precondition: Bool::And(
-                        Box::new(Bool::Equal(
-                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                                "x"
-                            ))))),
-                            Expr::Number(1)
-                        )),
-                        Box::new(Bool::Equal(
-                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                                "x"
-                            ))))),
-                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                                "x'old"
-                            ))))),
-                        ))
-                    ),
-                    postcondition: Bool::Equal(
-                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                            "x"
-                        ))))),
-                        Expr::Number(3)
-                    ),
-
-                    return_value: Value::Unit
-                }]
-            },
-            vec![]
-        ));
-    }
-
-    #[test]
-    fn prove_if_nested_fail1() {
-        assert!(!prove(
-            Program {
-                content: vec![Function {
-                    name: String::from("test"),
-                    content: vec![Command::Block(Block::If(
-                        vec![Bool::True],
-                        vec![vec![Command::Block(Block::If(
-                            vec![Bool::False],
-                            vec![vec![Command::Binding(Binding::Assignment(
-                                Variable::Named(String::from("x")),
-                                Type::I32,
-                                Value::Expr(Expr::Number(3)),
-                                false
-                            ))]],
-                            vec![Command::Binding(Binding::Assignment(
-                                Variable::Named(String::from("x")),
-                                Type::I32,
-                                Value::Expr(Expr::Number(1)),
-                                false
-                            ))]
-                        ))]],
-                        vec![Command::Binding(Binding::Assignment(
-                            Variable::Named(String::from("x")),
-                            Type::I32,
-                            Value::Expr(Expr::Number(1)),
-                            false
-                        ))]
-                    ))],
-                    input: vec![],
-                    output: Type::Unit,
-                    precondition: Bool::And(
-                        Box::new(Bool::Equal(
-                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                                "x"
-                            ))))),
-                            Expr::Number(1)
-                        )),
-                        Box::new(Bool::Equal(
-                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                                "x"
-                            ))))),
-                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                                "x'old"
-                            ))))),
-                        ))
-                    ),
-                    postcondition: Bool::Equal(
-                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                            "x"
-                        ))))),
-                        Expr::Number(3)
-                    ),
-
-                    return_value: Value::Unit
-                }]
-            },
-            vec![]
-        ));
-    }
-
-    #[test]
-    fn prove_if_multiple1() {
-        assert!(prove(
-            Program {
-                content: vec![Function {
-                    name: String::from("test"),
-                    content: vec![Command::Block(Block::If(
-                        vec![Bool::False, Bool::False, Bool::True],
-                        vec![
-                            vec![Command::Binding(Binding::Assignment(
-                                Variable::Named(String::from("x")),
-                                Type::I32,
-                                Value::Expr(Expr::Number(5)),
-                                false
-                            ))],
-                            vec![Command::Binding(Binding::Assignment(
-                                Variable::Named(String::from("x")),
-                                Type::I32,
-                                Value::Expr(Expr::Number(6)),
-                                false
-                            ))],
-                            vec![Command::Binding(Binding::Assignment(
-                                Variable::Named(String::from("x")),
-                                Type::I32,
-                                Value::Expr(Expr::Number(3)),
-                                false
-                            ))]
-                        ],
-                        vec![Command::Binding(Binding::Assignment(
-                            Variable::Named(String::from("x")),
-                            Type::I32,
-                            Value::Expr(Expr::Number(9)),
-                            false
-                        ))]
-                    ))],
-                    input: vec![],
-                    output: Type::Unit,
-                    precondition: Bool::And(
-                        Box::new(Bool::Equal(
-                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                                "x"
-                            ))))),
-                            Expr::Number(1)
-                        )),
-                        Box::new(Bool::Equal(
-                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                                "x"
-                            ))))),
-                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                                "x'old"
-                            ))))),
-                        ))
-                    ),
-                    postcondition: Bool::Equal(
-                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                            "x"
-                        ))))),
-                        Expr::Number(3)
-                    ),
-
-                    return_value: Value::Unit
-                }]
-            },
-            vec![]
-        ));
-    }
-
-    #[test]
-    fn prove_if_multiple_fail1() {
-        assert!(!prove(
-            Program {
-                content: vec![Function {
-                    name: String::from("test"),
-                    content: vec![Command::Block(Block::If(
-                        vec![Bool::False, Bool::True, Bool::False],
-                        vec![
-                            vec![Command::Binding(Binding::Assignment(
-                                Variable::Named(String::from("x")),
-                                Type::I32,
-                                Value::Expr(Expr::Number(3)),
-                                false
-                            ))],
-                            vec![Command::Binding(Binding::Assignment(
-                                Variable::Named(String::from("x")),
-                                Type::I32,
-                                Value::Expr(Expr::Number(5)),
-                                false
-                            ))],
-                            vec![Command::Binding(Binding::Assignment(
-                                Variable::Named(String::from("x")),
-                                Type::I32,
-                                Value::Expr(Expr::Number(3)),
-                                false
-                            ))]
-                        ],
-                        vec![Command::Binding(Binding::Assignment(
-                            Variable::Named(String::from("x")),
-                            Type::I32,
-                            Value::Expr(Expr::Number(3)),
-                            false
-                        ))]
-                    ))],
-                    input: vec![],
-                    output: Type::Unit,
-                    precondition: Bool::And(
-                        Box::new(Bool::Equal(
-                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                                "x"
-                            ))))),
-                            Expr::Number(1)
-                        )),
-                        Box::new(Bool::Equal(
-                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                                "x"
-                            ))))),
-                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                                "x'old"
-                            ))))),
-                        ))
-                    ),
-                    postcondition: Bool::Equal(
-                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
-                            "x"
-                        ))))),
-                        Expr::Number(3)
-                    ),
-
-                    return_value: Value::Unit
-                }]
-            },
-            vec![]
-        ));
     }
 }
