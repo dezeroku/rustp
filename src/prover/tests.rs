@@ -1410,3 +1410,119 @@ fn prove_while_postcondition_fail1() {
         vec![]
     ));
 }
+
+#[test]
+fn prove_array_elem_dummy1() {
+    assert!(prove(
+        Program {
+            content: vec![Function {
+                name: String::from("test"),
+                content: vec![Command::Binding(Binding::Assignment(
+                    Variable::ArrayElem(String::from("x"), Box::new(Value::Expr(Expr::Number(0)))),
+                    Type::I32,
+                    Value::Expr(Expr::Number(1)),
+                    false
+                ))],
+                input: vec![],
+                output: Type::Unit,
+                precondition: Bool::True,
+                postcondition: Bool::Equal(
+                    Expr::Value(Box::new(Value::Variable(Variable::ArrayElem(
+                        String::from("x"),
+                        Box::new(Value::Expr(Expr::Number(0)))
+                    )))),
+                    Expr::Number(1)
+                ),
+                return_value: Value::Unit
+            }]
+        },
+        vec![]
+    ));
+}
+
+#[test]
+fn prove_array_elem_dummy_fail1() {
+    assert!(!prove(
+        Program {
+            content: vec![Function {
+                name: String::from("test"),
+                content: vec![Command::Binding(Binding::Assignment(
+                    Variable::ArrayElem(String::from("x"), Box::new(Value::Expr(Expr::Number(0)))),
+                    Type::I32,
+                    Value::Expr(Expr::Number(1)),
+                    false
+                ))],
+                input: vec![],
+                output: Type::Unit,
+                precondition: Bool::True,
+                postcondition: Bool::Equal(
+                    Expr::Value(Box::new(Value::Variable(Variable::ArrayElem(
+                        String::from("x"),
+                        Box::new(Value::Expr(Expr::Number(0)))
+                    )))),
+                    Expr::Number(2)
+                ),
+                return_value: Value::Unit
+            }]
+        },
+        vec![]
+    ));
+}
+
+#[test]
+fn prove_array_dummy1() {
+    assert!(prove(
+        Program {
+            content: vec![Function {
+                name: String::from("test"),
+                content: vec![Command::Binding(Binding::Assignment(
+                    Variable::Named(String::from("x")),
+                    Type::Array(Box::new(Type::I32), 1),
+                    Value::Array(vec![Value::Expr(Expr::Number(1))]),
+                    false
+                ))],
+                input: vec![],
+                output: Type::Unit,
+                precondition: Bool::True,
+                postcondition: Bool::Equal(
+                    Expr::Value(Box::new(Value::Variable(Variable::ArrayElem(
+                        String::from("x"),
+                        Box::new(Value::Expr(Expr::Number(0)))
+                    )))),
+                    Expr::Number(1)
+                ),
+                return_value: Value::Unit
+            }]
+        },
+        vec![]
+    ));
+}
+
+#[test]
+fn prove_array_dummy_fail1() {
+    assert!(!prove(
+        Program {
+            content: vec![Function {
+                name: String::from("test"),
+                content: vec![Command::Binding(Binding::Assignment(
+                    Variable::Named(String::from("x")),
+                    Type::Array(Box::new(Type::I32), 1),
+                    Value::Array(vec![Value::Expr(Expr::Number(2))]),
+                    false
+                ))],
+                input: vec![],
+                output: Type::Unit,
+                precondition: Bool::True,
+                postcondition: Bool::Equal(
+                    Expr::Value(Box::new(Value::Variable(Variable::ArrayElem(
+                        String::from("x"),
+                        Box::new(Value::Expr(Expr::Number(0)))
+                    )))),
+                    Expr::Number(1)
+                ),
+                return_value: Value::Unit
+            }]
+        },
+        vec![]
+    ));
+}
