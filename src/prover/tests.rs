@@ -1526,3 +1526,77 @@ fn prove_array_dummy_fail1() {
         vec![]
     ));
 }
+
+#[test]
+fn prove_array_dummy_variable_index1() {
+    assert!(prove(
+        Program {
+            content: vec![Function {
+                name: String::from("test"),
+                content: vec![
+                    Command::Binding(Binding::Assignment(
+                        Variable::Named(String::from("y")),
+                        Type::I32,
+                        Value::Expr(Expr::Number(0)),
+                        false
+                    )),
+                    Command::Binding(Binding::Assignment(
+                        Variable::Named(String::from("x")),
+                        Type::Array(Box::new(Type::I32), 1),
+                        Value::Array(vec![Value::Expr(Expr::Number(1))]),
+                        false
+                    ))
+                ],
+                input: vec![],
+                output: Type::Unit,
+                precondition: Bool::True,
+                postcondition: Bool::Equal(
+                    Expr::Value(Box::new(Value::Variable(Variable::ArrayElem(
+                        String::from("x"),
+                        Box::new(Value::Variable(Variable::Named(String::from("y"))))
+                    )))),
+                    Expr::Number(1)
+                ),
+                return_value: Value::Unit
+            }]
+        },
+        vec![]
+    ));
+}
+
+#[test]
+fn prove_array_dummy_variable_index_fail1() {
+    assert!(!prove(
+        Program {
+            content: vec![Function {
+                name: String::from("test"),
+                content: vec![
+                    Command::Binding(Binding::Assignment(
+                        Variable::Named(String::from("y")),
+                        Type::I32,
+                        Value::Expr(Expr::Number(1)),
+                        false
+                    )),
+                    Command::Binding(Binding::Assignment(
+                        Variable::Named(String::from("x")),
+                        Type::Array(Box::new(Type::I32), 1),
+                        Value::Array(vec![Value::Expr(Expr::Number(1))]),
+                        false
+                    ))
+                ],
+                input: vec![],
+                output: Type::Unit,
+                precondition: Bool::True,
+                postcondition: Bool::Equal(
+                    Expr::Value(Box::new(Value::Variable(Variable::ArrayElem(
+                        String::from("x"),
+                        Box::new(Value::Variable(Variable::Named(String::from("y"))))
+                    )))),
+                    Expr::Number(1)
+                ),
+                return_value: Value::Unit
+            }]
+        },
+        vec![]
+    ));
+}

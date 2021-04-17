@@ -277,8 +277,50 @@ impl Provable for Binding {
             Binding::Declaration(_, _, _) => (q, true),
 
             Binding::Assignment(var, _, val, _) => {
+                // TODO: support array and tuple type correctly here
+                // Seems that this should be actually handled based on the value type?
+
                 // Swap all `var` occurences with the `val` in the condition
-                (q.swap(var, val), true)
+                match val.clone() {
+                    Value::Bool(_) => (q.swap(var, val), true),
+                    Value::Expr(_) => (q.swap(var, val), true),
+                    Value::Array(vals) => {
+                        let name = match var {
+                            Variable::Named(x) => x,
+                            _ => panic!("Incorrect assignment of array to different value than Variable::Named!")
+                        };
+
+                        // TODO: This approach does not handle variable based indexes at all.
+                        // Reconsider it
+                        let mut t = q;
+                        let mut counter = 0;
+                        for i in vals {
+                            t = t.swap(
+                                Variable::ArrayElem(
+                                    name.clone(),
+                                    Box::new(Value::Expr(Expr::Number(counter))),
+                                ),
+                                i,
+                            );
+                            counter += 1;
+                        }
+
+                        (t, true)
+                    }
+                    Value::Dereference(_) => unimplemented!(),
+                    Value::Reference(_) => unimplemented!(),
+                    Value::ReferenceMutable(_) => unimplemented!(),
+                    Value::Tuple(_vals) => {
+                        unimplemented!()
+                    }
+                    Value::Unit => (q, true),
+                    Value::Variable(_) => {
+                        // TODO: this may be not that easy actually?
+                        // check it just to be sure
+                        (q.swap(var, val), true)
+                    }
+                    Value::FunctionCall(_name, _args) => unimplemented!(),
+                }
             }
             Binding::Tuple(_vec) => {
                 unimplemented!()
