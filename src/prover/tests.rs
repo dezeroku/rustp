@@ -1470,6 +1470,87 @@ fn prove_array_elem_dummy_fail1() {
 }
 
 #[test]
+fn prove_array_elem_var1() {
+    /*
+    y = 0;
+    x[0] = 1;
+    //%assert x[y] == 1
+    */
+
+    assert!(prove(
+        Program {
+            content: vec![Function {
+                name: String::from("test"),
+                content: vec![Command::Binding(Binding::Assignment(
+                    Variable::ArrayElem(String::from("x"), Box::new(Value::Expr(Expr::Number(0)))),
+                    Type::I32,
+                    Value::Expr(Expr::Number(1)),
+                    false
+                ))],
+                input: vec![],
+                output: Type::Unit,
+                precondition: Bool::Equal(
+                    Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                        "y"
+                    ))))),
+                    Expr::Number(0)
+                ),
+
+                postcondition: Bool::Equal(
+                    Expr::Value(Box::new(Value::Variable(Variable::ArrayElem(
+                        String::from("x"),
+                        Box::new(Value::Variable(Variable::Named(String::from("y"))))
+                    )))),
+                    Expr::Number(1)
+                ),
+                return_value: Value::Unit
+            }]
+        },
+        vec![]
+    ));
+}
+
+#[test]
+fn prove_array_elem_var_fail1() {
+    /*
+    y = 0;
+    x[0] = 2;
+    //%assert x[y] == 1
+    */
+    assert!(!prove(
+        Program {
+            content: vec![Function {
+                name: String::from("test"),
+                content: vec![Command::Binding(Binding::Assignment(
+                    Variable::ArrayElem(String::from("x"), Box::new(Value::Expr(Expr::Number(0)))),
+                    Type::I32,
+                    Value::Expr(Expr::Number(2)),
+                    false
+                ))],
+                input: vec![],
+                output: Type::Unit,
+                precondition: Bool::Equal(
+                    Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                        "y"
+                    ))))),
+                    Expr::Number(0)
+                ),
+
+                postcondition: Bool::Equal(
+                    Expr::Value(Box::new(Value::Variable(Variable::ArrayElem(
+                        String::from("x"),
+                        Box::new(Value::Variable(Variable::Named(String::from("y"))))
+                    )))),
+                    Expr::Number(1)
+                ),
+                return_value: Value::Unit
+            }]
+        },
+        vec![]
+    ));
+}
+
+#[test]
 fn prove_array_dummy1() {
     assert!(prove(
         Program {
