@@ -85,7 +85,6 @@ fn create_triples(commands: Vec<Command>, precondition: Bool) -> Vec<(Bool, Vec<
             Command::ProveControl(x) => {
                 let a = match x {
                     ProveControl::Assert(z) => z,
-                    ProveControl::Assume(z) => z,
                 };
 
                 code_till_now.push(command.clone());
@@ -311,7 +310,6 @@ impl Provable for ProveControl {
     fn get_pre(self, _q: Bool, _p: Bool) -> (Bool, bool) {
         match self {
             ProveControl::Assert(a) => (a, true),
-            ProveControl::Assume(a) => (a, true),
         }
     }
 }
@@ -395,10 +393,7 @@ impl Provable for Block {
                 (to_return, true)
             }
             Block::While(cond, mut comms, inv) => {
-                // TODO: this wasn't tested yet
-                let p = inv.clone();
-
-                // TODO: this is strong invariant, we don't look for it yet
+                // TODO: this is strong invariant, we don't look for it yet, but should be added
                 let strong_inv = inv.clone();
                 //Bool::And(Box::new(inv.clone()), Box::new(q.clone()));
 
@@ -411,7 +406,7 @@ impl Provable for Block {
 
                 let triples = create_triples(comms.clone(), pre);
                 log::trace!("triples: {:?}", triples.clone());
-                let (mut calculated_triples, t) = calculate_triples(triples.clone());
+                let (calculated_triples, t) = calculate_triples(triples.clone());
                 if !t {
                     return (Bool::True, false);
                 }
@@ -432,7 +427,7 @@ impl Provable for Block {
 
                 let triples_not = create_triples(comms.clone(), pre_not);
                 log::trace!("triples_not: {:?}", triples_not.clone());
-                let (mut calculated_triples_not, t) = calculate_triples(triples_not);
+                let (calculated_triples_not, t) = calculate_triples(triples_not);
                 if !t {
                     return (Bool::True, false);
                 }
@@ -600,12 +595,6 @@ impl ProvableCommand for Command {
                     let x = b.as_bool(ctx).not();
                     log::debug!("ASSERT: {}", x);
                     (true, x)
-                }
-                ProveControl::Assume(_b) => {
-                    // No need to prove these, we believe them without testing
-                    // Just pas the information from that further on
-                    //true, b.as_bool(ctx).not())
-                    (false, z3::ast::Bool::from_bool(&ctx, true))
                 }
             },
             _ => {

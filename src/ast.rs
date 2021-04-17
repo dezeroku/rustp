@@ -68,14 +68,12 @@ impl fmt::Display for Bool {
 #[derive(PartialEq, Clone, Debug, Hash, Eq)]
 pub enum ProveControl {
     Assert(Bool),
-    Assume(Bool),
 }
 
 impl fmt::Display for ProveControl {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             ProveControl::Assert(x) => write!(f, "(assert {})", x),
-            ProveControl::Assume(x) => write!(f, "(assume {})", x),
         }
     }
 }
@@ -88,7 +86,6 @@ impl ProveControlFuncs for ProveControl {
     fn get_bool(self) -> Bool {
         match self {
             ProveControl::Assert(a) => a,
-            ProveControl::Assume(a) => a,
         }
     }
 }
@@ -369,6 +366,7 @@ impl PreconditionCreator for Function {
 
         // Actually add the 'old == original assertions
         // TODO: IMPORTANT: this should actually take types in the matter, how are we supposed to compare bools?
+        // If "b" is used does it mean automatically that b == true and "!b" == false, or is Z3 not that smart?
         for i in vars {
             t.precondition = Bool::And(Box::new(t.precondition), Box::new(i.old_wrapper()));
         }

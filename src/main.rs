@@ -1,7 +1,6 @@
 mod ast;
 mod parser;
 mod prover;
-mod simplifier;
 mod validator;
 
 use clap::{App, Arg};
@@ -204,9 +203,8 @@ fn main() {
     }
 
     let tree = parse(filename);
-    let simplified = simplifier::simplify(tree);
 
-    validate(simplified.clone());
-    prove(simplified.clone(), functions);
+    validate(tree.clone());
+    prove(tree, functions);
     println!();
 }

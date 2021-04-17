@@ -549,7 +549,7 @@ fn single_if(input: &str) -> IResult<&str, ast::Command> {
 }
 
 fn prove_control(input: &str) -> IResult<&str, ast::Command> {
-    alt((assert, assume))(input)
+    assert(input)
 }
 
 fn assert(input: &str) -> IResult<&str, ast::Command> {
@@ -559,18 +559,6 @@ fn assert(input: &str) -> IResult<&str, ast::Command> {
             (
                 next_input,
                 ast::Command::ProveControl(ast::ProveControl::Assert(*a)),
-            )
-        },
-    )
-}
-
-fn assume(input: &str) -> IResult<&str, ast::Command> {
-    tuple((prove_start, tag("assume"), space1, boolean::expr, newline))(input).map(
-        |(next_input, res)| {
-            let (_, _, _, a, _) = res;
-            (
-                next_input,
-                ast::Command::ProveControl(ast::ProveControl::Assume(*a)),
             )
         },
     )

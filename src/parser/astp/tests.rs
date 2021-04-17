@@ -481,13 +481,6 @@ fn assert1() {
 }
 
 #[test]
-fn assume1() {
-    assert!(assume("//%assume 143 == 12\n").is_ok());
-    assert!(assume("//%assume 143 - 4 < 2\n").unwrap().0 == "");
-    assert!(assume("//%assume true\n").unwrap().0 == "");
-}
-
-#[test]
 fn loop_invariant1() {
     assert!(loop_invariant("//%invariant 143 == 12\n").is_ok());
     assert!(loop_invariant("//%invariant 143 - 4 < 2\n").unwrap().0 == "");

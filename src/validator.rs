@@ -199,13 +199,6 @@ fn no_undefined_logic(
                     }
                 }
             }
-            Command::ProveControl(ProveControl::Assume(a)) => {
-                for i in get_namedecs(a) {
-                    if !no_undefined_check(&mut definitions, &functions, i) {
-                        return false;
-                    }
-                }
-            }
             Command::Binding(Binding::Declaration(name, _, _)) => {
                 def_push(&mut definitions, name);
             }
