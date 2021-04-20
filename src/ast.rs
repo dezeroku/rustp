@@ -34,6 +34,9 @@ impl fmt::Display for Program {
 
 #[derive(PartialEq, Clone, Debug, Eq, Hash)]
 pub enum Bool {
+    // This only works for integers
+    ForAll(Variable, Box<Bool>),
+    Exists(Variable, Box<Bool>),
     And(Box<Bool>, Box<Bool>),
     Or(Box<Bool>, Box<Bool>),
     Not(Box<Bool>),
@@ -50,6 +53,8 @@ pub enum Bool {
 impl fmt::Display for Bool {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            Bool::ForAll(a, b) => write!(f, "forall {} [{}]", a, b),
+            Bool::Exists(a, b) => write!(f, "exists {} [{}]", a, b),
             Bool::And(a, b) => write!(f, "{} && {}", a, b),
             Bool::Or(a, b) => write!(f, "{} || {}", a, b),
             Bool::Not(a) => write!(f, "!{}", a),
@@ -600,6 +605,18 @@ impl VarGetter for Block {
 impl VarGetter for Bool {
     fn get_variables(self) -> HashSet<Variable> {
         match self {
+            Bool::ForAll(a, b) => {
+                let mut t = a.get_variables();
+                t.extend(b.get_variables());
+
+                t
+            }
+            Bool::Exists(a, b) => {
+                let mut t = a.get_variables();
+                t.extend(b.get_variables());
+
+                t
+            }
             Bool::And(a, b) => {
                 let mut t = a.get_variables();
                 t.extend(b.get_variables());
@@ -753,6 +770,9 @@ pub trait Swapper {
 impl Swapper for Bool {
     fn swap(self, var: Variable, val: Value) -> Self {
         match self.clone() {
+            Bool::ForAll(a, b) => Bool::ForAll(a, Box::new(b.swap(var, val))),
+            Bool::Exists(a, b) => Bool::Exists(a, Box::new(b.swap(var, val))),
+
             Bool::And(a, b) => {
                 log::trace!("Bool::And::swap: {} {} {}", self, var, val);
                 Bool::And(

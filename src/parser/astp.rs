@@ -680,7 +680,7 @@ fn variable(input: &str) -> IResult<&str, ast::Variable> {
     alt((variable_tuple_elem, variable_array_elem, variable_single))(input)
 }
 
-fn variable_single(input: &str) -> IResult<&str, ast::Variable> {
+pub fn variable_single(input: &str) -> IResult<&str, ast::Variable> {
     variable_name(input)
         .and_then(|(next_input, res)| Ok((next_input, ast::Variable::Named(res.to_string()))))
 }

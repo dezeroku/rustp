@@ -3,8 +3,8 @@ use crate::parser::astp;
 use crate::parser::math;
 
 use nom::{
-    branch::alt, bytes::complete::tag, character::complete::space0, multi::many0, sequence::tuple,
-    IResult,
+    branch::alt, bytes::complete::tag, character::complete::space0, character::complete::space1,
+    multi::many0, sequence::tuple, IResult,
 };
 
 #[cfg(test)]
@@ -73,7 +73,14 @@ pub fn expr(input: &str) -> IResult<&str, Box<ast::Bool>> {
 }
 
 fn factor(input: &str) -> IResult<&str, Box<ast::Bool>> {
-    alt((factor_compare, factor_id, factor_not, factor_paren))(input)
+    alt((
+        forall,
+        exists,
+        factor_compare,
+        factor_id,
+        factor_not,
+        factor_paren,
+    ))(input)
 }
 
 fn expr_r_value(input: &str) -> IResult<&str, Box<ast::Bool>> {
@@ -185,4 +192,22 @@ fn or(input: &str) -> IResult<&str, &str> {
 
 fn not(input: &str) -> IResult<&str, &str> {
     tag("!")(input)
+}
+
+pub fn forall(input: &str) -> IResult<&str, Box<ast::Bool>> {
+    tuple((tag("forall"), space1, astp::variable_single, space1, expr))(input).map(
+        |(next_input, res)| {
+            let (_, _, v, _, b) = res;
+            (next_input, Box::new(ast::Bool::ForAll(v, b)))
+        },
+    )
+}
+
+pub fn exists(input: &str) -> IResult<&str, Box<ast::Bool>> {
+    tuple((tag("exists"), space1, astp::variable_single, space1, expr))(input).map(
+        |(next_input, res)| {
+            let (_, _, v, _, b) = res;
+            (next_input, Box::new(ast::Bool::Exists(v, b)))
+        },
+    )
 }

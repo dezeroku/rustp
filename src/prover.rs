@@ -1,5 +1,6 @@
 use crate::ast::*;
 use log;
+use std::convert::TryInto;
 use z3;
 
 #[cfg(test)]
@@ -593,6 +594,32 @@ impl ProvableInt for Expr {
 impl ProvableBool for Bool {
     fn as_bool<'a>(self, ctx: &'a z3::Context) -> z3::ast::Bool<'a> {
         match self {
+            Bool::ForAll(var, b) => {
+                // TODO: check when the ArrayElems are properly indexed, I don't know what's happening here
+                let forall: z3::ast::Bool = z3::ast::forall_const(
+                    ctx,
+                    &[&Value::Variable(var).as_int(ctx).clone().into()],
+                    //&[&f_x_pattern],
+                    &[],
+                    &b.as_bool(ctx),
+                )
+                .try_into()
+                .unwrap();
+                forall
+            }
+            Bool::Exists(var, b) => {
+                // TODO: check when the ArrayElems are properly indexed, I don't know what's happening here
+                let exists: z3::ast::Bool = z3::ast::exists_const(
+                    ctx,
+                    &[&Value::Variable(var).as_int(ctx).clone().into()],
+                    //&[&f_x_pattern],
+                    &[],
+                    &b.as_bool(ctx),
+                )
+                .try_into()
+                .unwrap();
+                exists
+            }
             Bool::True => (z3::ast::Bool::from_bool(&ctx, true)),
             Bool::False => (z3::ast::Bool::from_bool(&ctx, false)),
             Bool::And(_a, _b) => {

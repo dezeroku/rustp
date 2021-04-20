@@ -57,6 +57,14 @@ fn get_namedecs(b: Bool) -> Vec<Namedec> {
 
 fn _get_namedecs_bool(z: Bool, mut decs: &mut Vec<Namedec>) {
     match z {
+        Bool::ForAll(a, b) => {
+            decs.push(Namedec::Variable(a));
+            _get_namedecs_bool(*b, &mut decs);
+        }
+        Bool::Exists(a, b) => {
+            decs.push(Namedec::Variable(a));
+            _get_namedecs_bool(*b, &mut decs);
+        }
         Bool::And(a, b) => {
             _get_namedecs_bool(*a, &mut decs);
             _get_namedecs_bool(*b, &mut decs);
@@ -193,6 +201,11 @@ fn no_undefined_logic(
     for comm in content {
         match comm {
             Command::ProveControl(ProveControl::Assert(a)) => {
+                match a.clone() {
+                    Bool::ForAll(v, _) => def_push(&mut definitions, v),
+                    Bool::Exists(v, _) => def_push(&mut definitions, v),
+                    _ => {}
+                };
                 for i in get_namedecs(a) {
                     if !no_undefined_check(&mut definitions, &functions, i) {
                         return false;

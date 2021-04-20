@@ -293,3 +293,39 @@ fn equal1() {
         ))
     );
 }
+
+#[test]
+fn forall1() {
+    assert!(forall("forall i 143 == 12").is_ok());
+    assert!(forall("forall j 3 - j < 2").unwrap().0 == "");
+    assert_eq!(
+        forall("forall x x == 1").unwrap().1,
+        Box::new(ast::Bool::ForAll(
+            ast::Variable::Named(String::from("x")),
+            Box::new(ast::Bool::Equal(
+                ast::Expr::Value(Box::new(ast::Value::Variable(ast::Variable::Named(
+                    String::from("x")
+                )))),
+                ast::Expr::Number(1)
+            ))
+        ))
+    );
+}
+
+#[test]
+fn exists1() {
+    assert!(exists("exists i 143 == 12").is_ok());
+    assert!(exists("exists j 3 - j < 2").unwrap().0 == "");
+    assert_eq!(
+        exists("exists x x == 1").unwrap().1,
+        Box::new(ast::Bool::Exists(
+            ast::Variable::Named(String::from("x")),
+            Box::new(ast::Bool::Equal(
+                ast::Expr::Value(Box::new(ast::Value::Variable(ast::Variable::Named(
+                    String::from("x")
+                )))),
+                ast::Expr::Number(1)
+            ))
+        ))
+    );
+}
