@@ -28,7 +28,7 @@ fn function_input(input: &str) -> IResult<&str, ast::Binding> {
         space0,
         char(':'),
         space0,
-        type_def,
+        type_def_function,
         space0,
     ))(input)
     .and_then(|(next_input, res)| {
@@ -1197,12 +1197,31 @@ fn array_type(input: &str) -> IResult<&str, ast::Type> {
     })
 }
 
+fn array_slice_type(input: &str) -> IResult<&str, ast::Type> {
+    tuple((
+        char('&'),
+        space0,
+        char('['),
+        space0,
+        type_def_single,
+        space0,
+        char(']'),
+    ))(input)
+    .and_then(|(next_input, (_, _, _, _, t, _, _))| {
+        Ok((next_input, ast::Type::ArraySlice(Box::new(t))))
+    })
+}
+
 fn type_def_reference(input: &str) -> IResult<&str, bool> {
     tag("&")(input).and_then(|(next_input, _)| Ok((next_input, false)))
 }
 
 fn type_def_reference_mut(input: &str) -> IResult<&str, bool> {
     tag("&mut")(input).and_then(|(next_input, _)| Ok((next_input, true)))
+}
+
+fn type_def_function(input: &str) -> IResult<&str, ast::Type> {
+    alt((array_slice_type, type_def))(input)
 }
 
 fn type_def(input: &str) -> IResult<&str, ast::Type> {

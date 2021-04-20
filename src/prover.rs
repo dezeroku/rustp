@@ -14,6 +14,12 @@ fn define_return_value(output: Type, return_value: Value) -> Command {
             return_value,
             false,
         )),
+        Type::ArraySlice(_) => Command::Binding(Binding::Assignment(
+            Variable::Named(String::from("return_value")),
+            output,
+            return_value,
+            false,
+        )),
         Type::Bool => Command::Binding(Binding::Assignment(
             Variable::Named(String::from("return_value")),
             output,

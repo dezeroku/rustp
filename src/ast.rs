@@ -105,6 +105,8 @@ pub enum Type {
     ReferenceMutable(Box<Type>),
     /// type of the array and its length
     Array(Box<Type>, i32),
+    /// Basically same as array, but its length is not known
+    ArraySlice(Box<Type>),
     Unit,
 }
 
@@ -117,6 +119,7 @@ impl fmt::Display for Type {
             Type::Reference(a) => write!(f, "&({})", a),
             Type::ReferenceMutable(a) => write!(f, "mut&({})", a),
             Type::Array(a, l) => write!(f, "[{};{}]", a, l),
+            Type::ArraySlice(a) => write!(f, "&[{}]", a),
             Type::Unit => write!(f, "()"),
         }
     }
