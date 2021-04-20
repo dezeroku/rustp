@@ -583,7 +583,7 @@ fn prove_start(input: &str) -> IResult<&str, &str> {
 }
 
 fn function_name(input: &str) -> IResult<&str, &str> {
-    let l = |x: char| char::is_alphabetic(x) || '_' == x;
+    let l = |x: char| char::is_alphabetic(x) || char::is_numeric(x) || '_' == x;
 
     take_while1(l)(input).and_then(|(next_input, res)| Ok((next_input, res)))
 }

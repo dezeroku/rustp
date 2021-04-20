@@ -133,16 +133,19 @@ fn calculate_triples(
         }
         // Invert vector here - backwards, for proper postcondition expansion
         log::trace!("{}", q);
+        log::trace!("NEW TRIPLE");
         for comm in comms.clone() {
             match comm.clone() {
                 Command::ProveControl(_) => {}
                 _ => {
                     log::trace!("{}", comm.clone());
+                    log::trace!("PRE BEFORE: {}", q.clone());
                     let (_q, t) = comm.get_pre(q.clone(), p.clone());
                     if !t {
                         return (Vec::new(), false);
                     }
                     q = _q;
+                    log::trace!("PRE AFTER: {}", q.clone());
                     log::trace!("{}", q);
                 }
             }
@@ -184,6 +187,7 @@ fn prove_triples(to_prove: Vec<(Bool, Vec<Command>, Bool)>) -> bool {
 
     for (p, command, q) in to_prove {
         log::debug!("{} => [[{:?}]] => {}", p.clone(), command, q.clone());
+        log::trace!("{} => [[{:?}]] => {}", p.clone(), command, q.clone());
         log::info!("{} => {}", p.clone(), q.clone());
 
         let mut cfg = z3::Config::new();
@@ -283,11 +287,74 @@ impl Provable for Binding {
         match self {
             Binding::Declaration(_, _, _) => (q, true),
 
-            Binding::Assignment(var, _, val, _) => {
-                // TODO: support array and tuple type correctly here
-                // Seems that this should be actually handled based on the value type?
+            Binding::Assignment(var, _, val, _) => match val.clone() {
+                Value::Tuple(_) => {
+                    panic! {"This is not supported, something went wrong!"}
+                }
+                _ => Assignment::Single(var, val).get_pre(q, _p),
+            },
+            Binding::Tuple(vec) => {
+                let mut real_vec = Vec::new();
+                for i in vec {
+                    match i {
+                        // TODO: this is actually made of bindings, fix it
+                        Command::Assignment(a) => {
+                            real_vec.push(a);
+                        }
+                        _ => {
+                            panic!("This is not supported, something went wrong!")
+                        }
+                    }
+                }
 
+                Assignment::Tuple(real_vec).get_pre(q, _p)
+            }
+        }
+    }
+}
+
+impl Provable for Assignment {
+    fn get_pre(self, q: Bool, p: Bool) -> (Bool, bool) {
+        match self {
+            Assignment::Tuple(vec) => {
+                let mut t = q;
+                for i in vec {
+                    let (_t, l) = i.get_pre(t, p.clone());
+                    if !l {
+                        return (Bool::True, false);
+                    }
+                    t = _t;
+                }
+                (t, true)
+            }
+
+            Assignment::Single(var, val) => {
                 // Swap all `var` occurences with the `val` in the condition
+                // Support only simple int, bool and arrayelem assignments for now
+
+                // TODO: support array and tuple type correctly here
+
+                match var.clone() {
+                    Variable::Named(_) => (q.swap(var, val), true),
+                    Variable::TupleElem(_, _) => unimplemented!(),
+                    Variable::Empty => (q, true),
+                    Variable::ArrayElem(arr_name, index) => {
+                        // TODO: working on it
+                        // This is conditional
+                        // a[X] = Y
+                        // for all a[Z] do:
+                        //     if Z == X:
+                        //         a[Z] = Y
+                        //     else:
+                        //         a[Z] = a[Z]
+                        // So it seems this one has to be implemented using Z3's ite?
+                        // Does this have a potential for some kind of an infinite recursion?
+
+                        log::trace!("DEADBEEF!");
+                        (q.index_swap(arr_name, *index, val), true)
+                    }
+                }
+                /*
                 match val.clone() {
                     Value::Bool(_) => (q.swap(var, val), true),
                     Value::Expr(_) => (q.swap(var, val), true),
@@ -321,36 +388,49 @@ impl Provable for Binding {
                         unimplemented!()
                     }
                     Value::Unit => (q, true),
-                    Value::Variable(_) => {
-                        // TODO: this may be not that easy actually?
-                        // check it just to be sure
-                        (q.swap(var, val), true)
-                    }
-                    Value::FunctionCall(_name, _args) => unimplemented!(),
-                }
-            }
-            Binding::Tuple(_vec) => {
-                unimplemented!()
-            }
-        }
-    }
-}
+                    Value::Variable(a) => match a.clone() {
+                        Variable::Named(_) => (q.swap(var, val), true),
+                        Variable::ArrayElem(name, index) => {
+                            // TODO: won't work for tuples
 
-impl Provable for Assignment {
-    fn get_pre(self, q: Bool, p: Bool) -> (Bool, bool) {
-        match self {
-            Assignment::Tuple(vec) => {
-                let mut t = q;
-                for i in vec {
-                    let (_t, l) = i.get_pre(t, p.clone());
-                    if !l {
-                        return (Bool::True, false);
+                            match var {
+                                //                                Variable::ArrayElem(arr_name, arr_index) => (
+                                //                                    q.swap(
+                                //                                        var,
+                                //                                        Value::Ternary(
+                                //                                            Bool::Equal(index, arr_index),
+                                //                                            val,
+                                //                                            Value::Variable(Variable::ArrayElem(
+                                //                                                arr_name, arr_index,
+                                //                                            )),
+                                //                                        ),
+                                //                                    ),
+                                //                                    true,
+                                //                                ),
+                                _ => (q.swap(var, val), true),
+                            }
+                        }
+                        Variable::TupleElem(_name, _index) => {
+                            // This is conditional
+                            // a[X] = Y
+                            // for all a[Z] do:
+                            //     if Z == X:
+                            //         a[Z] = Y
+                            //     else:
+                            //         a[Z] = a[Z]
+                            // So it seems this one has to be implemented using Z3's ite?
+                            unimplemented!()
+                        }
+                        Variable::Empty => (q, true),
+                    },
+                    Value::FunctionCall(_name, _args) => unimplemented!(),
+                    Value::Ternary(cond, a, b) => {
+                        // TODO: important for arrays
+                        unimplemented!()
                     }
-                    t = _t;
                 }
-                (t, true)
+                */
             }
-            Assignment::Single(var, val) => (q.swap(var, val), true),
         }
     }
 }
@@ -539,6 +619,10 @@ impl ProvableValue for Value {
             Value::ReferenceMutable(_v) => unimplemented!(),
             Value::Dereference(_v) => unimplemented!(),
             Value::Unit => unimplemented!(),
+            Value::Ternary(cond, a, b) => {
+                let t = cond.as_bool(ctx);
+                t.ite(&a.as_bool(ctx), &b.as_bool(ctx))
+            }
         }
     }
 
@@ -569,6 +653,10 @@ impl ProvableValue for Value {
             Value::ReferenceMutable(_v) => unimplemented!(),
             Value::Dereference(_v) => unimplemented!(),
             Value::Unit => unimplemented!(),
+            Value::Ternary(cond, a, b) => {
+                let t = cond.as_bool(ctx);
+                t.ite(&a.as_int(ctx), &b.as_int(ctx))
+            }
         }
     }
 }
@@ -639,6 +727,13 @@ impl ProvableBool for Bool {
                 z3::ast::Bool::or(ctx, &[&a.as_bool(ctx), &b.as_bool(ctx)])
             }
             Bool::Not(a) => z3::ast::Bool::not(&a.as_bool(ctx)),
+            Bool::ValueEqual(a, b) => z3::ast::Bool::and(
+                ctx,
+                &[
+                    &a.clone().as_int(ctx).ge(&b.clone().as_int(ctx)),
+                    &a.as_int(ctx).le(&b.as_int(ctx)),
+                ],
+            ),
             Bool::Equal(a, b) => z3::ast::Bool::and(
                 ctx,
                 &[

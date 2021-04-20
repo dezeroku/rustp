@@ -43,6 +43,7 @@ pub enum Bool {
     Value(Box<Value>),
     True,
     False,
+    ValueEqual(Box<Value>, Box<Value>),
     Equal(Expr, Expr),
     GreaterEqual(Expr, Expr),
     LowerEqual(Expr, Expr),
@@ -61,6 +62,7 @@ impl fmt::Display for Bool {
             Bool::Value(a) => write!(f, "{}", a),
             Bool::True => write!(f, "true"),
             Bool::False => write!(f, "false"),
+            Bool::ValueEqual(a, b) => write!(f, "{} == {}", a, b),
             Bool::Equal(a, b) => write!(f, "{} == {}", a, b),
             Bool::GreaterThan(a, b) => write!(f, "{} > {}", a, b),
             Bool::LowerThan(a, b) => write!(f, "{} < {}", a, b),
@@ -132,12 +134,14 @@ pub enum Value {
     Variable(Variable),
     Tuple(Vec<Value>),
     Array(Vec<Value>),
-    // function name, arguments, output type
+    /// function name, arguments, output type
     FunctionCall(String, Vec<Value>),
     Dereference(Box<Value>),
     Reference(Box<Value>),
     ReferenceMutable(Box<Value>),
     Unit,
+    /// if bool then first else second
+    Ternary(Bool, Box<Value>, Box<Value>),
 }
 
 impl fmt::Display for Value {
@@ -154,6 +158,9 @@ impl fmt::Display for Value {
             Value::ReferenceMutable(x) => write!(f, "{:?}", x),
             Value::FunctionCall(name, input) => {
                 write!(f, "FunctionCall({}, {:?})", name, input)
+            }
+            Value::Ternary(c, a, b) => {
+                write!(f, "Ternary(if {} then {} else {})", c, a, b)
             }
         }
     }
@@ -636,6 +643,12 @@ impl VarGetter for Bool {
             Bool::Value(a) => a.get_variables(),
             Bool::True => HashSet::new(),
             Bool::False => HashSet::new(),
+            Bool::ValueEqual(a, b) => {
+                let mut t = a.get_variables();
+                t.extend(b.get_variables());
+
+                t
+            }
             Bool::Equal(a, b) => {
                 let mut t = a.get_variables();
                 t.extend(b.get_variables());
@@ -740,6 +753,12 @@ impl VarGetter for Value {
             Value::Reference(a) => a.get_variables(),
             Value::ReferenceMutable(a) => a.get_variables(),
             Value::Unit => HashSet::new(),
+            Value::Ternary(c, a, b) => {
+                let mut t = c.get_variables();
+                t.extend(a.get_variables());
+                t.extend(b.get_variables());
+                t
+            }
         }
     }
 }
@@ -768,6 +787,9 @@ impl VarGetter for Variable {
 pub trait Swapper {
     /// Swap all the occurences of `var` with `val`
     fn swap(self, var: Variable, val: Value) -> Self;
+
+    /// Change the value of index, if base name matches
+    fn index_swap(self, name: String, index: Value, val: Value) -> Self;
 }
 
 impl Swapper for Bool {
@@ -775,57 +797,86 @@ impl Swapper for Bool {
         match self.clone() {
             Bool::ForAll(a, b) => Bool::ForAll(a, Box::new(b.swap(var, val))),
             Bool::Exists(a, b) => Bool::Exists(a, Box::new(b.swap(var, val))),
-
-            Bool::And(a, b) => {
-                log::trace!("Bool::And::swap: {} {} {}", self, var, val);
-                Bool::And(
-                    Box::new(a.swap(var.clone(), val.clone())),
-                    Box::new(b.swap(var, val)),
-                )
-            }
-            Bool::Or(a, b) => {
-                log::trace!("Bool::Or::swap: {} {} {}", self, var, val);
-                Bool::Or(
-                    Box::new(a.swap(var.clone(), val.clone())),
-                    Box::new(b.swap(var, val)),
-                )
-            }
-            Bool::Not(a) => {
-                log::trace!("Bool::Not::swap: {} {} {}", self, var, val);
-                Bool::Not(Box::new(a.swap(var.clone(), val.clone())))
-            }
-            Bool::Value(a) => {
-                log::trace!("Bool::Value::swap: {} {} {}", self, var, val);
-                Bool::Value(Box::new(a.swap(var.clone(), val.clone())))
-            }
-            Bool::True => {
-                log::trace!("Bool::True::swap: {} {} {}", self, var, val);
-                Bool::True
-            }
-            Bool::False => {
-                log::trace!("Bool::False::swap: {} {} {}", self, var, val);
-                Bool::False
-            }
-            Bool::Equal(a, b) => {
-                log::trace!("Bool::Equal::swap: {} {} {}", self, var, val);
-                Bool::Equal(a.swap(var.clone(), val.clone()), b.swap(var, val))
-            }
+            Bool::And(a, b) => Bool::And(
+                Box::new(a.swap(var.clone(), val.clone())),
+                Box::new(b.swap(var, val)),
+            ),
+            Bool::Or(a, b) => Bool::Or(
+                Box::new(a.swap(var.clone(), val.clone())),
+                Box::new(b.swap(var, val)),
+            ),
+            Bool::Not(a) => Bool::Not(Box::new(a.swap(var.clone(), val.clone()))),
+            Bool::Value(a) => Bool::Value(Box::new(a.swap(var.clone(), val.clone()))),
+            Bool::True => Bool::True,
+            Bool::False => Bool::False,
+            Bool::ValueEqual(a, b) => Bool::ValueEqual(
+                Box::new(a.swap(var.clone(), val.clone())),
+                Box::new(b.swap(var, val)),
+            ),
+            Bool::Equal(a, b) => Bool::Equal(a.swap(var.clone(), val.clone()), b.swap(var, val)),
             Bool::GreaterEqual(a, b) => {
-                log::trace!("Bool::GreaterEqual::swap: {} {} {}", self, var, val);
                 Bool::GreaterEqual(a.swap(var.clone(), val.clone()), b.swap(var, val))
             }
             Bool::LowerEqual(a, b) => {
-                log::trace!("Bool::LowerEqual::swap: {} {} {}", self, var, val);
                 Bool::LowerEqual(a.swap(var.clone(), val.clone()), b.swap(var, val))
             }
             Bool::GreaterThan(a, b) => {
-                log::trace!("Bool::GreaterThan::swap: {} {} {}", self, var, val);
                 Bool::GreaterThan(a.swap(var.clone(), val.clone()), b.swap(var, val))
             }
             Bool::LowerThan(a, b) => {
-                log::trace!("Bool::LowerThan::swap: {} {} {}", self, var, val);
                 Bool::LowerThan(a.swap(var.clone(), val.clone()), b.swap(var, val))
             }
+        }
+    }
+
+    fn index_swap(self, name: String, index: Value, val: Value) -> Self {
+        match self.clone() {
+            Bool::ForAll(a, b) => Bool::ForAll(a, Box::new(b.index_swap(name, index, val))),
+            Bool::Exists(a, b) => Bool::Exists(a, Box::new(b.index_swap(name, index, val))),
+            Bool::And(a, b) => Bool::And(
+                Box::new(a.index_swap(name.clone(), index.clone(), val.clone())),
+                Box::new(b.index_swap(name, index, val)),
+            ),
+            Bool::Or(a, b) => Bool::Or(
+                Box::new(a.index_swap(name.clone(), index.clone(), val.clone())),
+                Box::new(b.index_swap(name, index, val)),
+            ),
+            Bool::Not(a) => Bool::Not(Box::new(a.index_swap(
+                name.clone(),
+                index.clone(),
+                val.clone(),
+            ))),
+            Bool::Value(a) => Bool::Value(Box::new(a.index_swap(
+                name.clone(),
+                index.clone(),
+                val.clone(),
+            ))),
+            Bool::True => Bool::True,
+            Bool::False => Bool::False,
+            Bool::ValueEqual(a, b) => Bool::ValueEqual(
+                Box::new(a.index_swap(name.clone(), index.clone(), val.clone())),
+                Box::new(b.index_swap(name.clone(), index, val)),
+            ),
+            Bool::Equal(a, b) => Bool::Equal(
+                a.index_swap(name.clone(), index.clone(), val.clone()),
+                b.index_swap(name.clone(), index, val),
+            ),
+            Bool::GreaterEqual(a, b) => Bool::GreaterEqual(
+                a.index_swap(name.clone(), index.clone(), val.clone()),
+                b.index_swap(name, index, val),
+            ),
+            Bool::LowerEqual(a, b) => Bool::LowerEqual(
+                a.index_swap(name.clone(), index.clone(), val.clone()),
+                b.index_swap(name, index, val),
+            ),
+            Bool::GreaterThan(a, b) => Bool::GreaterThan(
+                a.index_swap(name.clone(), index.clone(), val.clone()),
+                b.index_swap(name, index, val),
+            ),
+            Bool::LowerThan(a, b) => Bool::LowerThan(
+                a.index_swap(name.clone(), index.clone(), val.clone()),
+                b.index_swap(name, index, val),
+            ),
         }
     }
 }
@@ -833,22 +884,25 @@ impl Swapper for Bool {
 impl Swapper for Expr {
     fn swap(self, var: Variable, val: Value) -> Self {
         match self.clone() {
-            Expr::Number(_) => {
-                log::trace!("Expr::Number::swap: {} {} {}", self, var, val);
-                self
-            }
-            Expr::Op(a, op, b) => {
-                log::trace!("Expr::Op::swap: {} {} {}", self, var, val);
-                Expr::Op(
-                    Box::new(a.swap(var.clone(), val.clone())),
-                    op,
-                    Box::new(b.swap(var, val)),
-                )
-            }
-            Expr::Value(v) => {
-                log::trace!("Expr::Value::swap: {} {} {}", self, var, val);
-                Expr::Value(Box::new(v.swap(var, val)))
-            }
+            Expr::Number(_) => self,
+            Expr::Op(a, op, b) => Expr::Op(
+                Box::new(a.swap(var.clone(), val.clone())),
+                op,
+                Box::new(b.swap(var, val)),
+            ),
+            Expr::Value(v) => Expr::Value(Box::new(v.swap(var, val))),
+        }
+    }
+
+    fn index_swap(self, name: String, index: Value, val: Value) -> Self {
+        match self.clone() {
+            Expr::Number(_) => self,
+            Expr::Op(a, op, b) => Expr::Op(
+                Box::new(a.index_swap(name.clone(), index.clone(), val.clone())),
+                op,
+                Box::new(b.index_swap(name, index, val)),
+            ),
+            Expr::Value(v) => Expr::Value(Box::new(v.index_swap(name, index, val))),
         }
     }
 }
@@ -856,16 +910,9 @@ impl Swapper for Expr {
 impl Swapper for Value {
     fn swap(self, var: Variable, val: Value) -> Self {
         match self.clone() {
-            Value::Expr(a) => {
-                log::trace!("Value::Expr::swap: {} {} {}", self, var, val);
-                Value::Expr(a.swap(var, val))
-            }
-            Value::Bool(a) => {
-                log::trace!("Value::Bool::swap: {} {} {}", self, var, val);
-                Value::Bool(a.swap(var, val))
-            }
+            Value::Expr(a) => Value::Expr(a.swap(var, val)),
+            Value::Bool(a) => Value::Bool(a.swap(var, val)),
             Value::Variable(a) => {
-                log::trace!("Value::Variable::swap: {} {} {}", self, var, val);
                 if a == var {
                     val
                 } else {
@@ -873,7 +920,6 @@ impl Swapper for Value {
                 }
             }
             Value::Tuple(vec) => {
-                log::trace!("Value::Tuple::swap: {} {} {}", self, var, val);
                 let mut res = Vec::new();
                 for i in vec {
                     res.push(i.swap(var.clone(), val.clone()));
@@ -881,7 +927,6 @@ impl Swapper for Value {
                 Value::Tuple(res)
             }
             Value::Array(vec) => {
-                log::trace!("Value::Array::swap: {} {} {}", self, var, val);
                 let mut res = Vec::new();
                 for i in vec {
                     res.push(i.swap(var.clone(), val.clone()));
@@ -889,29 +934,87 @@ impl Swapper for Value {
                 Value::Array(res)
             }
             Value::FunctionCall(name, vec) => {
-                log::trace!("Value::FunctionCall::swap: {} {} {}", self, var, val);
                 let mut res = Vec::new();
                 for i in vec {
                     res.push(i.swap(var.clone(), val.clone()));
                 }
                 Value::FunctionCall(name, res)
             }
-            Value::Dereference(a) => {
-                log::trace!("Value::Dereference::swap: {} {} {}", self, var, val);
-                Value::Dereference(Box::new(a.swap(var, val)))
+            Value::Dereference(a) => Value::Dereference(Box::new(a.swap(var, val))),
+            Value::Reference(a) => Value::Reference(Box::new(a.swap(var, val))),
+            Value::ReferenceMutable(a) => Value::ReferenceMutable(Box::new(a.swap(var, val))),
+            Value::Unit => Value::Unit,
+            Value::Ternary(c, a, b) => Value::Ternary(
+                c.swap(var.clone(), val.clone()),
+                Box::new(a.swap(var.clone(), val.clone())),
+                Box::new(b.swap(var.clone(), val.clone())),
+            ),
+        }
+    }
+
+    fn index_swap(self, name: String, index: Value, val: Value) -> Self {
+        match self.clone() {
+            Value::Expr(a) => Value::Expr(a.index_swap(name, index, val)),
+            Value::Bool(a) => Value::Bool(a.index_swap(name, index, val)),
+            Value::Variable(a) => {
+                match a.clone() {
+                    // TODO: consider also setting tuple elem here, so indexing works properly for it
+                    Variable::ArrayElem(arr_name, arr_index) => {
+                        if arr_name.clone() == name.clone() {
+                            // This has to be taken care of via ternary
+                            // Does it require us to be aple to compare Values similarly to how we do it for Expr?
+                            // TODO: So return here something like Ternary(*arr_index == index, val, arr_name[arr_index])
+                            //if *arr_index == index {
+                            //    return Value::Variable(Variable::ArrayElem(
+                            //        arr_name,
+                            //        Box::new(val),
+                            //    ));
+                            //}
+                            return Value::Ternary(
+                                Bool::ValueEqual(arr_index.clone(), Box::new(index.clone())),
+                                Box::new(val),
+                                Box::new(Value::Variable(Variable::ArrayElem(arr_name, arr_index))),
+                            );
+                        }
+
+                        // No change, different name of the array
+                        Value::Variable(Variable::ArrayElem(arr_name, arr_index))
+                    }
+                    _ => Value::Variable(a),
+                }
             }
-            Value::Reference(a) => {
-                log::trace!("Value::Reference::swap: {} {} {}", self, var, val);
-                Value::Reference(Box::new(a.swap(var, val)))
+            Value::Tuple(vec) => {
+                let mut res = Vec::new();
+                for i in vec {
+                    res.push(i.index_swap(name.clone(), index.clone(), val.clone()));
+                }
+                Value::Tuple(res)
             }
+            Value::Array(vec) => {
+                let mut res = Vec::new();
+                for i in vec {
+                    res.push(i.index_swap(name.clone(), index.clone(), val.clone()));
+                }
+                Value::Array(res)
+            }
+            Value::FunctionCall(name, vec) => {
+                let mut res = Vec::new();
+                for i in vec {
+                    res.push(i.index_swap(name.clone(), index.clone(), val.clone()));
+                }
+                Value::FunctionCall(name, res)
+            }
+            Value::Dereference(a) => Value::Dereference(Box::new(a.index_swap(name, index, val))),
+            Value::Reference(a) => Value::Reference(Box::new(a.index_swap(name, index, val))),
             Value::ReferenceMutable(a) => {
-                log::trace!("Value::ReferenceMutable::swap: {} {} {}", self, var, val);
-                Value::ReferenceMutable(Box::new(a.swap(var, val)))
+                Value::ReferenceMutable(Box::new(a.index_swap(name, index, val)))
             }
-            Value::Unit => {
-                log::trace!("Value::Unit::swap: {} {} {}", self, var, val);
-                Value::Unit
-            }
+            Value::Unit => Value::Unit,
+            Value::Ternary(c, a, b) => Value::Ternary(
+                c.index_swap(name.clone(), index.clone(), val.clone()),
+                Box::new(a.index_swap(name.clone(), index.clone(), val.clone())),
+                Box::new(b.index_swap(name.clone(), index.clone(), val.clone())),
+            ),
         }
     }
 }

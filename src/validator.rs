@@ -99,6 +99,8 @@ fn _get_namedecs_bool(z: Bool, mut decs: &mut Vec<Namedec>) {
             _get_namedecs_expr(a, &mut decs);
             _get_namedecs_expr(b, &mut decs);
         }
+        Bool::ValueEqual(_, _) => { //Only internal, no validation needed
+        }
         Bool::True => {}
         Bool::False => {}
     }
@@ -140,6 +142,12 @@ fn _get_namedecs_val(z: Value, mut decs: &mut Vec<Namedec>) {
         Value::ReferenceMutable(a) => {
             _get_namedecs_val(*a, &mut decs);
         }
+        Value::Ternary(c, a, b) => {
+            _get_namedecs_bool(c, &mut decs);
+            _get_namedecs_val(*a, &mut decs);
+            _get_namedecs_val(*b, &mut decs);
+        }
+
         Value::Unit => {}
     }
 }
