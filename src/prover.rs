@@ -549,6 +549,7 @@ trait ProvableValue {
 
 impl ProvableValue for Value {
     fn as_bool<'a>(self, ctx: &'a z3::Context) -> z3::ast::Bool<'a> {
+        log::trace!("AS_BOOL: {}", self.clone());
         match self {
             Value::Expr(e) => panic!("Bool value used as an int: {}", e),
             Value::Bool(b) => b.as_bool(ctx),
@@ -582,9 +583,23 @@ impl ProvableValue for Value {
     }
 
     fn as_int<'a>(self, ctx: &'a z3::Context) -> z3::ast::Int<'a> {
+        log::trace!("AS_INT: {}", self.clone());
         match self {
             Value::Expr(e) => e.as_int(ctx),
-            Value::Bool(b) => panic!("Bool value ({}) used as an int", b),
+            Value::Bool(b) => {
+                // HACK: This is ugly, should be solved on the parsing level somehow?
+                //panic!("Bool value ({}) used as an int", b)
+                log::debug!("Bool value ({}) used as an int", b);
+                match b.clone() {
+                    Bool::Value(a) => match *a {
+                        Value::Variable(x) => {
+                            Value::Expr(Expr::Value(Box::new(Value::Variable(x)))).as_int(ctx)
+                        }
+                        _ => panic!("Bool value ({}) used as an int", b),
+                    },
+                    _ => panic!("Bool value ({}) used as an int", b),
+                }
+            }
             Value::Variable(x) => match x {
                 Variable::Named(name) => z3::ast::Int::new_const(ctx, name),
                 Variable::Empty => panic!("Empty variable tried to be used as an int!"),
@@ -626,6 +641,7 @@ trait ProvableInt {
 
 impl ProvableInt for Expr {
     fn as_int<'a>(self, ctx: &'a z3::Context) -> z3::ast::Int<'a> {
+        log::trace!("AS_INT: {}", self.clone());
         match self {
             Expr::Number(a) => z3::ast::Int::from_i64(ctx, a.into()),
             Expr::Op(a, op, b) => match op {
@@ -642,6 +658,7 @@ impl ProvableInt for Expr {
 
 impl ProvableBool for Bool {
     fn as_bool<'a>(self, ctx: &'a z3::Context) -> z3::ast::Bool<'a> {
+        log::trace!("AS_BOOL: {}", self.clone());
         match self {
             Bool::ForAll(var, b) => {
                 // TODO: check when the ArrayElems are properly indexed, I don't know what's happening here
@@ -712,6 +729,7 @@ trait ProvableCommand {
 impl ProvableCommand for Command {
     // Concept: Try to prove not (negate everything) to try to find if there exists an incorrect mapping?
     fn as_bool<'a>(self, ctx: &'a z3::Context) -> (bool, z3::ast::Bool<'a>) {
+        log::trace!("AS_BOOL: {}", self.clone());
         match self {
             Command::ProveControl(a) => match a {
                 // We are trying to find COUNTER example here.

@@ -238,7 +238,7 @@ pub enum Variable {
 impl fmt::Display for Variable {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Variable::Named(x) => write!(f, "Named({})", x),
+            Variable::Named(x) => write!(f, "{}", x),
             Variable::Empty => write!(f, "_"),
             Variable::ArrayElem(a, i) => write!(f, "{}[{}]", a, i),
             Variable::TupleElem(a, i) => write!(f, "{}.{}", a, i),

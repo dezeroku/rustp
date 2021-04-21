@@ -263,18 +263,20 @@ fn no_undefined_logic(
                     }
                 }
             }
-            Command::Block(Block::While(_, vec, a)) => {
+            Command::Block(Block::While(_, vec, _a)) => {
                 let mut temp = definitions.clone();
 
                 if !no_undefined_logic(vec, &mut temp, &functions) {
                     return false;
                 }
 
-                for i in get_namedecs(a) {
-                    if !no_undefined_check(&mut definitions, &functions, i) {
-                        return false;
-                    }
-                }
+                // TODO: properly handle checking the ForAll and Exists cases in the invariant
+                //def_push(&mut temp, a);
+                //for i in get_namedecs(a) {
+                //    if !no_undefined_check(&mut definitions, &functions, i) {
+                //        return false;
+                //    }
+                //}
             }
 
             _ => {}
