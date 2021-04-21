@@ -202,6 +202,18 @@ fn factor_compare_smaller1() {
             ))
     );
 
+    assert_eq!(
+        factor_compare_smaller("i < n").unwrap().1,
+        Box::new(ast::Bool::LowerThan(
+            ast::Expr::Value(Box::new(ast::Value::Variable(ast::Variable::Named(
+                String::from("i")
+            )))),
+            ast::Expr::Value(Box::new(ast::Value::Variable(ast::Variable::Named(
+                String::from("n")
+            ))))
+        ))
+    );
+
     assert!(
         factor_compare_smaller("a < (b + 3)").unwrap().1
             == Box::new(ast::Bool::LowerThan(

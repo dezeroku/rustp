@@ -13,7 +13,9 @@ use nom::{
 #[cfg(test)]
 mod tests;
 
-static KEYWORDS: [&'static str; 7] = ["let", "true", "false", "&&", "||", "!", "_"];
+static KEYWORDS: [&'static str; 11] = [
+    "let", "true", "false", "&&", "||", "!", "_", "for", "while", "if", "else",
+];
 
 pub fn program(input: &str) -> IResult<&str, ast::Program> {
     many1(function)(input)
@@ -1250,5 +1252,15 @@ fn type_def_bool(input: &str) -> IResult<&str, ast::Type> {
 }
 
 fn type_def_i32(input: &str) -> IResult<&str, ast::Type> {
+    alt((_type_def_i32, type_def_usize))(input)
+}
+
+fn _type_def_i32(input: &str) -> IResult<&str, ast::Type> {
     tag("i32")(input).and_then(|(next_input, _)| Ok((next_input, ast::Type::I32)))
+}
+
+fn type_def_usize(input: &str) -> IResult<&str, ast::Type> {
+    // This is pretty low effort way to support the usize type for iterating,
+    // should not really matter for proving that much, we treat everything as Int anyway
+    tag("usize")(input).and_then(|(next_input, _)| Ok((next_input, ast::Type::I32)))
 }

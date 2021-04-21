@@ -302,9 +302,19 @@ impl fmt::Display for Block {
                 let mut temp = String::new();
                 for i in conds.iter().zip(comms.iter()) {
                     let (cond, comm) = i;
-                    temp += &format!("if ({}) \n({:?}) el", cond, comm).to_owned();
+                    let mut tempo = String::new();
+                    for i in comm {
+                        tempo += &format!("{}\n", i).to_owned();
+                    }
+
+                    temp += &format!("if ({}) \n({}) el", cond, tempo).to_owned();
                 }
-                temp += &format!("se ({:?})", el).to_owned();
+                let mut tempo = String::new();
+                for i in el {
+                    tempo += &format!("{}\n", i).to_owned();
+                }
+
+                temp += &format!("se ({})", tempo).to_owned();
                 write!(f, "{}", temp)
             }
             Block::ForRange(i, a, b, comms, inv) => {
@@ -321,8 +331,8 @@ impl fmt::Display for Block {
             }
             Block::While(c, comms, inv) => {
                 let mut temp = String::new();
-                for i in comms.iter() {
-                    temp += &format!("{}", i).to_owned();
+                for i in comms {
+                    temp += &format!("{}\n", i).to_owned();
                 }
 
                 write!(f, "[{}] while {} (\n{}\n)", inv, c, temp)

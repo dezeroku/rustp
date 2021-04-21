@@ -386,10 +386,13 @@ fn no_forbidden_decs_func(func: Function) -> bool {
 
 /// Check for overshadowing declarations (the ones that overwrite another)
 fn no_shadowing(input: Program) -> bool {
-    let mut definitions = Vec::new();
-    for func in input.content.clone() {
-        definitions.push(func.name);
-    }
+    let definitions = Vec::new();
+    /*
+        for func in input.content.clone() {
+            // Don't put the function name in the check, as it's not a part of our proving context anyway
+            //definitions.push(func.name);
+        }
+    */
 
     for func in input.content {
         if !no_shadowing_func(func, definitions.clone()) {
@@ -405,6 +408,7 @@ fn no_shadowing_check(definitions: &mut Vec<String>, val: Variable) -> bool {
         Variable::Named(a) => a,
         _ => return true,
     };
+    log::trace!("{:?}", definitions);
 
     if definitions.iter().any(|i| *i == name) {
         println!("Variable redeclared: {}", name);
@@ -416,6 +420,9 @@ fn no_shadowing_check(definitions: &mut Vec<String>, val: Variable) -> bool {
 }
 
 fn no_shadowing_logic(content: Vec<Command>, mut definitions: &mut Vec<String>) -> bool {
+    for x in content.clone() {
+        log::trace!("{}", x);
+    }
     for comm in content {
         match comm {
             Command::Binding(Binding::Declaration(name, _, _)) => {
