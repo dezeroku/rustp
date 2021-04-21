@@ -6,11 +6,23 @@ use z3;
 #[cfg(test)]
 mod tests;
 
+fn prove_block(precondition: Bool, code: Vec<Command>, postcondition: Bool) -> ProveBlock {
+    ProveBlock {
+        precondition: precondition.clone(),
+        code: code,
+        postcondition: postcondition.clone(),
+        precondition_original: precondition,
+        postcondition_original: postcondition,
+    }
+}
+
 #[derive(Clone, Debug)]
 struct ProveBlock {
     precondition: Bool,
     code: Vec<Command>,
     postcondition: Bool,
+    precondition_original: Bool,
+    postcondition_original: Bool,
 }
 
 fn define_return_value(output: Type, return_value: Value) -> Command {
@@ -61,7 +73,7 @@ fn wrap_function(f: Function) -> Function {
 
     let mut temp = f.content;
 
-    // Set the noop as first, so the further generation works fine, even if assertion is first in the code
+    // Set the noop as first command, so the further generation works fine, even if assertion is first in the code
     temp.insert(0, Command::Noop);
 
     // Put the noop at the end so loops are in bounds, should be cleaned up in the end, similar to the push of noop above
@@ -113,6 +125,7 @@ impl ProveBlock {
             precondition,
             code: mut commands,
             postcondition,
+            ..
         } = self;
 
         // Do this ugly asserting thing in only single place
@@ -140,11 +153,11 @@ impl ProveBlock {
                     };
 
                     code_till_now.push(command.clone());
-                    triples.push(ProveBlock {
-                        precondition: precondition.clone(),
-                        code: code_till_now.clone(),
-                        postcondition: a.clone(),
-                    });
+                    triples.push(prove_block(
+                        precondition.clone(),
+                        code_till_now.clone(),
+                        a.clone(),
+                    ));
                 }
                 z => {
                     code_till_now.push(z);
@@ -166,6 +179,8 @@ impl ProveBlock {
             precondition: p,
             code: mut _comms,
             postcondition: mut q,
+            precondition_original: p_orig,
+            postcondition_original: q_orig,
         } = self.clone();
 
         let mut comms = Vec::new();
@@ -224,6 +239,8 @@ impl ProveBlock {
                 precondition: p,
                 code: comms,
                 postcondition: q,
+                precondition_original: p_orig,
+                postcondition_original: q_orig,
             },
             true,
         )
@@ -235,6 +252,8 @@ impl ProveBlock {
             precondition: p,
             code: commands,
             postcondition: q,
+            precondition_original: p_orig,
+            postcondition_original: q_orig,
         } = self;
 
         log::debug!("START TO PROVE FINAL LIST:");
@@ -272,7 +291,15 @@ impl ProveBlock {
         match result {
             Some(z3::SatResult::Sat) => {
                 log::debug!("Model: {:?}", t.get_model());
-                println!("Failed to prove: {} => {}", p, q);
+                let mut temp = String::from("");
+                for i in commands {
+                    temp += &format!("{}\n", i).to_owned();
+                }
+                println!(
+                    "Failed to prove: {} => {} with code:\n{}",
+                    p_orig, q_orig, temp
+                );
+                log::debug!("Failed to prove: {} => {}", p, q);
                 return false;
             }
             Some(z3::SatResult::Unsat) => {
@@ -306,11 +333,11 @@ pub fn prove(input: Program, funcs_to_prove: Vec<String>) -> bool {
         let wrapped_func = wrap_function(func);
 
         // TODO: probably precondition will have to be expanded a bit
-        let to_prove = ProveBlock {
-            precondition: wrapped_func.precondition,
-            code: wrapped_func.content,
-            postcondition: wrapped_func.postcondition,
-        };
+        let to_prove = prove_block(
+            wrapped_func.precondition,
+            wrapped_func.content,
+            wrapped_func.postcondition,
+        );
 
         let triples = to_prove.create_triples();
 
@@ -536,12 +563,7 @@ impl Provable for Block {
                     log::trace!("c: {:?}", c.clone());
                     // TODO: Probably real precondition should be used instead of q here
                     // should it have some local context?
-                    let (temp, ok) = ProveBlock {
-                        precondition: q.clone(),
-                        code: c,
-                        postcondition: q.clone(),
-                    }
-                    .calculate();
+                    let (temp, ok) = prove_block(q.clone(), c, q.clone()).calculate();
 
                     if !ok {
                         return (Bool::True, false);
@@ -594,11 +616,7 @@ impl Provable for Block {
                 let pre = Bool::And(Box::new(strong_inv.clone()), Box::new(cond.clone()));
 
                 // First check that the invariant works, so inv && cond -> inv
-                let inv_prove = ProveBlock {
-                    precondition: pre,
-                    code: comms.clone(),
-                    postcondition: inv.clone(),
-                };
+                let inv_prove = prove_block(pre, comms.clone(), inv.clone());
 
                 if !inv_prove.simple_check() {
                     return (Bool::True, false);
@@ -610,11 +628,7 @@ impl Provable for Block {
                     Box::new(Bool::Not(Box::new(cond.clone()))),
                 );
 
-                let real_prove = ProveBlock {
-                    precondition: pre_not,
-                    code: comms.clone(),
-                    postcondition: q.clone(),
-                };
+                let real_prove = prove_block(pre_not, comms.clone(), q.clone());
 
                 if !real_prove.simple_check() {
                     return (Bool::True, false);
