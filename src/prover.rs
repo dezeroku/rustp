@@ -297,10 +297,10 @@ pub fn prove(input: Program, funcs_to_prove: Vec<String>) -> bool {
     for func in input.content.clone() {
         let f_name = func.name.clone();
         if !funcs_to_prove.contains(&f_name) && !funcs_to_prove.is_empty() {
-            log::debug!("Skipping function: {}", f_name);
+            log::warn!("Skipping function: {}", f_name);
             continue;
         } else {
-            log::info!("Proving function: {}", f_name);
+            log::warn!("Proving function: {}", f_name);
         }
 
         let wrapped_func = wrap_function(func);
@@ -325,11 +325,11 @@ pub fn prove(input: Program, funcs_to_prove: Vec<String>) -> bool {
             }
 
             if !final_res {
-                log::info!("Failed to prove function: {}", f_name);
+                log::warn!("Failed to prove function: {}", f_name);
                 return false;
             }
         }
-        log::info!("Successfully proved function: {}", f_name);
+        log::warn!("Successfully proved function: {}", f_name);
     }
 
     true
