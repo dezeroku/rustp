@@ -6,6 +6,13 @@ use z3;
 #[cfg(test)]
 mod tests;
 
+#[derive(Clone, Debug)]
+struct ProveBlock {
+    precondition: Bool,
+    code: Vec<Command>,
+    postcondition: Bool,
+}
+
 fn define_return_value(output: Type, return_value: Value) -> Command {
     match output {
         Type::Array(_, _) => Command::Binding(Binding::Assignment(
@@ -48,7 +55,7 @@ fn define_return_value(output: Type, return_value: Value) -> Command {
     }
 }
 
-/// Return function with pre/postconditions properly wrapped, so it's ready to be proved
+/// Return function with some wrapping for e.g. return_value, so it's ready to be taken by ProveBlock
 fn wrap_function(f: Function) -> Function {
     let mut to_prove = f.clone();
 
@@ -64,11 +71,6 @@ fn wrap_function(f: Function) -> Function {
     // TODO: maybe consider renaming it to ret'val or something like that?
     temp.push(define_return_value(f.output, f.return_value));
 
-    // Set postcondition as last assert
-    temp.push(Command::ProveControl(ProveControl::Assert(
-        f.postcondition.clone(),
-    )));
-
     to_prove.content = temp.clone();
 
     log::debug!("START TO PROVE COMMAND LIST:");
@@ -80,43 +82,86 @@ fn wrap_function(f: Function) -> Function {
     to_prove
 }
 
-/// Wrap asserts in {p}commands{q} triples, the {q} values are not yet expanded properly
-fn create_triples(commands: Vec<Command>, precondition: Bool) -> Vec<(Bool, Vec<Command>, Bool)> {
-    let mut triples = Vec::new();
+impl ProveBlock {
+    /// Runs all the commands needed to just check whether the prove is successfull for this block
+    fn simple_check(self) -> bool {
+        let triples = self.create_triples();
+        log::trace!("triples: {:?}", triples.clone());
 
-    let mut code_till_now = Vec::new();
-
-    for command in commands {
-        log::debug!("{:?}", command);
-        match command.clone() {
-            Command::ProveControl(x) => {
-                let a = match x {
-                    ProveControl::Assert(z) => z,
-                };
-
-                code_till_now.push(command.clone());
-                triples.push((precondition.clone(), code_till_now.clone(), a));
+        for t in triples {
+            let mut final_res = true;
+            let (to_check, ok) = t.calculate();
+            if !ok {
+                final_res = false;
+            } else {
+                if !to_check.prove() {
+                    final_res = false;
+                }
             }
-            z => {
-                code_till_now.push(z);
+            if !final_res {
+                return false;
             }
         }
-        log::debug!("{:?}", triples);
+        true
     }
 
-    triples
-}
+    /// Wrap asserts in {p}commands{q} triples, the {q} values are not yet expanded properly
+    /// Returns multiple proveblocks from a single one
+    fn create_triples(self) -> Vec<ProveBlock> {
+        //commands: Vec<Command>, precondition: Bool) -> Vec<ProveBlock> {
+        let ProveBlock {
+            precondition,
+            code: mut commands,
+            postcondition,
+        } = self;
 
-/// Actually compute the "real" postcondition that should be proven, based on the code
-/// The return type is (<p, comms, q>, prove_fail)
-/// as some proving can already happen at this stage (loops)
-fn calculate_triples(
-    triples: Vec<(Bool, Vec<Command>, Bool)>,
-) -> (Vec<(Bool, Vec<Command>, Bool)>, bool) {
-    let mut triples_calculated = Vec::new();
+        // Do this ugly asserting thing in only single place
+        commands.push(Command::Noop);
+        commands.push(Command::ProveControl(ProveControl::Assert(
+            postcondition.clone(),
+        )));
 
-    // TODO: Consider also listing the original post, to make user output easier
-    for (p, mut _comms, mut q) in triples {
+        let mut triples = Vec::new();
+
+        let mut code_till_now = Vec::new();
+
+        for command in commands {
+            log::debug!("{:?}", command);
+            match command.clone() {
+                Command::ProveControl(x) => {
+                    let a = match x {
+                        ProveControl::Assert(z) => z,
+                    };
+
+                    code_till_now.push(command.clone());
+                    triples.push(ProveBlock {
+                        precondition: precondition.clone(),
+                        code: code_till_now.clone(),
+                        postcondition: a,
+                    });
+                }
+                z => {
+                    code_till_now.push(z);
+                }
+            }
+            log::debug!("{:?}", triples);
+        }
+
+        log::trace!("{:?}", triples);
+
+        triples
+    }
+
+    /// Actually compute the "real" postcondition that should be proven, based on the code
+    /// The return type is (<p, comms, q>, prove_fail)
+    /// as some proving can already happen at this stage (loops)
+    fn calculate(self) -> (ProveBlock, bool) {
+        let ProveBlock {
+            precondition: p,
+            code: mut _comms,
+            postcondition: mut q,
+        } = self.clone();
+
         let mut comms = Vec::new();
         // Invert array for proving - backwards
         let mut check = true;
@@ -142,7 +187,7 @@ fn calculate_triples(
                     log::trace!("PRE BEFORE: {}", q.clone());
                     let (_q, t) = comm.get_pre(q.clone(), p.clone());
                     if !t {
-                        return (Vec::new(), false);
+                        return (self, false);
                     }
                     q = _q;
                     log::trace!("PRE AFTER: {}", q.clone());
@@ -151,43 +196,52 @@ fn calculate_triples(
             }
         }
 
-        triples_calculated.push((p, comms, q));
+        // Invert array for proving - forwards
+        //let mut to_return = Vec::new();
+        //let mut check = true;
+        //while check {
+        //    let t = triples_calculated.pop();
+        //    match t {
+        //        Some(x) => {
+        //            to_return.push(x);
+        //        }
+        //        None => {
+        //            check = false;
+        //        }
+        //    }
+        //}
+
+        //(to_return, true)
+        (
+            ProveBlock {
+                precondition: p,
+                code: comms,
+                postcondition: q,
+            },
+            true,
+        )
     }
 
-    // Invert array for proving - forwards
-    let mut to_return = Vec::new();
-    let mut check = true;
-    while check {
-        let t = triples_calculated.pop();
-        match t {
-            Some(x) => {
-                to_return.push(x);
-            }
-            None => {
-                check = false;
-            }
-        }
-    }
+    /// Prove the triples
+    fn prove(self) -> bool {
+        let ProveBlock {
+            precondition: p,
+            code: commands,
+            postcondition: q,
+        } = self;
 
-    (to_return, true)
-}
-
-/// Prove the triples
-fn prove_triples(to_prove: Vec<(Bool, Vec<Command>, Bool)>) -> bool {
-    log::debug!("START TO PROVE FINAL LIST:");
-    for (p, _, q) in to_prove.clone() {
+        log::debug!("START TO PROVE FINAL LIST:");
+        log::trace!("{} => {:?} => {}", p.clone(), commands, q.clone());
         log::debug!("{} => {}", p, q);
-    }
-    log::debug!("END TO PROVE FINAL LIST:");
+        log::debug!("END TO PROVE FINAL LIST:");
 
-    // TODO: is this needed?
-    // Isn't this kind of what we are proving separately for each case? As there's no need to
-    // check that p -> q for every single command, as we control the q generation. Only assertions matter.
-    //to_prove_vec_final.push((to_prove.precondition, Command::Noop, p_n));
+        // TODO: is this needed?
+        // Isn't this kind of what we are proving separately for each case? As there's no need to
+        // check that p -> q for every single command, as we control the q generation. Only assertions matter.
+        //to_prove_vec_final.push((to_prove.precondition, Command::Noop, p_n));
 
-    for (p, command, q) in to_prove {
-        log::debug!("{} => [[{:?}]] => {}", p.clone(), command, q.clone());
-        log::trace!("{} => [[{:?}]] => {}", p.clone(), command, q.clone());
+        log::debug!("{} => [[{:?}]] => {}", p.clone(), commands, q.clone());
+        log::trace!("{} => [[{:?}]] => {}", p.clone(), commands, q.clone());
         log::info!("{} => {}", p.clone(), q.clone());
 
         let mut cfg = z3::Config::new();
@@ -215,15 +269,15 @@ fn prove_triples(to_prove: Vec<(Bool, Vec<Command>, Bool)>) -> bool {
                 return false;
             }
             Some(z3::SatResult::Unsat) => {
-                log::debug!("Proven: {:?}", command);
+                log::debug!("Proven: {:?}", commands);
             }
             _ => {
                 panic!("Unknown result!")
             }
         }
-    }
 
-    true
+        true
+    }
 }
 
 /// Prove the program provided as an input.
@@ -244,22 +298,32 @@ pub fn prove(input: Program, funcs_to_prove: Vec<String>) -> bool {
 
         let wrapped_func = wrap_function(func);
 
-        let triples = create_triples(wrapped_func.content, wrapped_func.precondition);
+        // TODO: probably precondition will have to be expanded a bit
+        let to_prove = ProveBlock {
+            precondition: wrapped_func.precondition,
+            code: wrapped_func.content,
+            postcondition: wrapped_func.postcondition,
+        };
 
-        let (calculated_triples, t) = calculate_triples(triples);
-        if !t {
-            log::info!("Failed to prove function: {}", f_name);
-            return false;
+        let triples = to_prove.create_triples();
+
+        for i in triples {
+            let final_res;
+            let (current, temp_res) = i.calculate();
+
+            if temp_res {
+                log::trace!("LOL");
+                final_res = current.prove();
+            } else {
+                final_res = temp_res;
+            }
+
+            if !final_res {
+                log::info!("Failed to prove function: {}", f_name);
+                return false;
+            }
         }
-
-        let t = prove_triples(calculated_triples);
-
-        if t {
-            log::info!("Successfully proved function: {}", f_name);
-        } else {
-            log::info!("Failed to prove function: {}", f_name);
-            return false;
-        }
+        log::info!("Successfully proved function: {}", f_name);
     }
 
     true
@@ -467,22 +531,18 @@ impl Provable for Block {
                     log::trace!("c: {:?}", c.clone());
                     // TODO: Probably real precondition should be used instead of q here
                     // should it have some local context?
-                    let triples = create_triples(c, q.clone());
-                    log::trace!("triples: {:?}", triples.clone());
-                    let (mut calculated_triples, t) = calculate_triples(triples);
-                    if !t {
+                    let (temp, ok) = ProveBlock {
+                        precondition: q.clone(),
+                        code: c,
+                        postcondition: q.clone(),
+                    }
+                    .calculate();
+
+                    if !ok {
                         return (Bool::True, false);
                     }
 
-                    log::trace!("calculated_triples: {:?}", calculated_triples.clone());
-
-                    let (_, _, f) = calculated_triples.pop().unwrap();
-                    let mut temp = f;
-                    for (_, _, t) in calculated_triples {
-                        temp = Bool::And(Box::new(temp), Box::new(t));
-                        log::debug!("q AFTER: {}", temp);
-                    }
-                    ps.push(temp);
+                    ps.push(temp.postcondition);
                 }
 
                 // The ifs generated conditions
@@ -521,7 +581,7 @@ impl Provable for Block {
 
                 (to_return, true)
             }
-            Block::While(cond, mut comms, inv) => {
+            Block::While(cond, comms, inv) => {
                 // TODO: this is strong invariant, we don't look for it yet, but should be added
                 let strong_inv = inv.clone();
                 //Bool::And(Box::new(inv.clone()), Box::new(q.clone()));
@@ -529,18 +589,15 @@ impl Provable for Block {
                 let pre = Bool::And(Box::new(strong_inv.clone()), Box::new(cond.clone()));
 
                 // First check that the invariant works, so inv && cond -> inv
-                // This is pretty stupid, but hey...
-                comms.push(Command::Noop);
-                comms.push(Command::ProveControl(ProveControl::Assert(inv.clone())));
+                let inv_prove = ProveBlock {
+                    precondition: pre,
+                    code: comms.clone(),
+                    postcondition: inv.clone(),
+                };
 
-                let triples = create_triples(comms.clone(), pre);
-                log::trace!("triples: {:?}", triples.clone());
-                let (calculated_triples, t) = calculate_triples(triples.clone());
-                if !t {
+                if !inv_prove.simple_check() {
                     return (Bool::True, false);
                 }
-
-                log::trace!("calculated_triples: {:?}", calculated_triples.clone());
 
                 // Also check that not condition && invariant => post
                 let pre_not = Bool::And(
@@ -548,35 +605,17 @@ impl Provable for Block {
                     Box::new(Bool::Not(Box::new(cond.clone()))),
                 );
 
-                // Remove last assert and change it with the proper post
-                // These implications should be tested here it seems
-                // TODO: is this ok?
-                comms.pop();
-                comms.push(Command::ProveControl(ProveControl::Assert(q.clone())));
+                let real_prove = ProveBlock {
+                    precondition: pre_not,
+                    code: comms.clone(),
+                    postcondition: q.clone(),
+                };
 
-                let triples_not = create_triples(comms.clone(), pre_not);
-                log::trace!("triples_not: {:?}", triples_not.clone());
-                let (calculated_triples_not, t) = calculate_triples(triples_not);
-                if !t {
-                    return (Bool::True, false);
-                }
-                log::trace!(
-                    "calculated_triples_not: {:?}",
-                    calculated_triples_not.clone()
-                );
-
-                if !prove_triples(calculated_triples) {
-                    return (Bool::True, false);
-                }
-
-                if !prove_triples(calculated_triples_not) {
+                if !real_prove.simple_check() {
                     return (Bool::True, false);
                 }
 
                 // At this point, just return the real computed {p}
-                //let final_list = calculated_triples;
-                //final_list.extend(calculated_triples_not);
-
                 // TODO: this is probably not going to be inv
                 (inv, true)
             }
