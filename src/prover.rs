@@ -76,11 +76,7 @@ fn wrap_function(f: Function) -> Function {
     // Set the noop as first command, so the further generation works fine, even if assertion is first in the code
     temp.insert(0, Command::Noop);
 
-    // Put the noop at the end so loops are in bounds, should be cleaned up in the end, similar to the push of noop above
-    temp.push(Command::Noop);
-
     // Assign the value being returned to the return_value variable
-    // TODO: maybe consider renaming it to ret'val or something like that?
     temp.push(define_return_value(f.output, f.return_value));
 
     to_prove.content = temp.clone();
@@ -95,7 +91,7 @@ fn wrap_function(f: Function) -> Function {
 }
 
 impl ProveBlock {
-    /// Runs all the commands needed to just check whether the prove is successfull for this block
+    /// Runs all the commands needed to just check whether the prove is successfull for this block (create, calculate, prove)
     fn simple_check(self) -> bool {
         let triples = self.create_triples();
         log::trace!("triples: {:?}", triples.clone());
@@ -120,7 +116,6 @@ impl ProveBlock {
     /// Wrap asserts in {p}commands{q} triples, the {q} values are not yet expanded properly
     /// Returns multiple proveblocks from a single one
     fn create_triples(self) -> Vec<ProveBlock> {
-        //commands: Vec<Command>, precondition: Bool) -> Vec<ProveBlock> {
         let ProveBlock {
             precondition,
             code: mut commands,
@@ -128,7 +123,7 @@ impl ProveBlock {
             ..
         } = self;
 
-        // Do this ugly asserting thing in only single place
+        // Do this ugly asserting thing in single place (here)
         commands.push(Command::Noop);
         commands.push(Command::ProveControl(ProveControl::Assert(
             postcondition.clone(),
@@ -210,6 +205,7 @@ impl ProveBlock {
                     if !t {
                         return (self, false);
                     }
+
                     // new q is previous p
                     q = _q;
                     log::trace!("PRE AFTER: {}", q.clone());
@@ -218,22 +214,6 @@ impl ProveBlock {
             }
         }
 
-        // Invert array for proving - forwards
-        //let mut to_return = Vec::new();
-        //let mut check = true;
-        //while check {
-        //    let t = triples_calculated.pop();
-        //    match t {
-        //        Some(x) => {
-        //            to_return.push(x);
-        //        }
-        //        None => {
-        //            check = false;
-        //        }
-        //    }
-        //}
-
-        //(to_return, true)
         (
             ProveBlock {
                 precondition: p,
@@ -246,7 +226,7 @@ impl ProveBlock {
         )
     }
 
-    /// Prove the triples
+    /// Actually prove the triple (pre and post conditions should be calculated at this point)
     fn prove(self) -> bool {
         let ProveBlock {
             precondition: p,
@@ -317,10 +297,6 @@ impl ProveBlock {
 /// Prove the program provided as an input.
 /// The funcs_to_prove vec may specify names of the functions to be proved, if empty all the functions are proved by default
 pub fn prove(input: Program, funcs_to_prove: Vec<String>) -> bool {
-    // Create context for each command and try to prove it individually?
-    // All that we have to prove are assertions, all the rest just modifies context.
-
-    // For now just display everything here when it happens.
     for func in input.content.clone() {
         let f_name = func.name.clone();
         if !funcs_to_prove.contains(&f_name) && !funcs_to_prove.is_empty() {
@@ -364,6 +340,7 @@ pub fn prove(input: Program, funcs_to_prove: Vec<String>) -> bool {
 
 trait Provable {
     /// Find the P for {P} S {Q} to prove
+    /// It gets calculated starting from the {Q} and then moving backwards (due to the assignment axiom)
     fn get_pre(self, q: Bool, p: Bool) -> (Bool, bool);
 }
 
@@ -427,16 +404,12 @@ impl Provable for Assignment {
 
             Assignment::Single(var, val) => {
                 // Swap all `var` occurences with the `val` in the condition
-                // Support only simple int, bool and arrayelem assignments for now
-
-                // TODO: support array and tuple type correctly here
-
+                // Supports only simple int, bool and arrayelem assignments for now
                 match var.clone() {
                     Variable::Named(_) => (q.swap(var, val), true),
                     Variable::TupleElem(_, _) => unimplemented!(),
                     Variable::Empty => (q, true),
                     Variable::ArrayElem(arr_name, index) => {
-                        // TODO: working on it
                         // This is conditional
                         // a[X] = Y
                         // for all a[Z] do:
@@ -444,88 +417,10 @@ impl Provable for Assignment {
                         //         a[Z] = Y
                         //     else:
                         //         a[Z] = a[Z]
-                        // So it seems this one has to be implemented using Z3's ite?
-                        // Does this have a potential for some kind of an infinite recursion?
 
                         (q.index_swap(arr_name, *index, val.clone()), true)
                     }
                 }
-                /*
-                match val.clone() {
-                    Value::Bool(_) => (q.swap(var, val), true),
-                    Value::Expr(_) => (q.swap(var, val), true),
-                    Value::Array(vals) => {
-                        let name = match var {
-                            Variable::Named(x) => x,
-                            _ => panic!("Incorrect assignment of array to different value than Variable::Named!")
-                        };
-
-                        // TODO: This approach does not handle variable based indexes at all.
-                        // Reconsider it
-                        let mut t = q;
-                        let mut counter = 0;
-                        for i in vals {
-                            t = t.swap(
-                                Variable::ArrayElem(
-                                    name.clone(),
-                                    Box::new(Value::Expr(Expr::Number(counter))),
-                                ),
-                                i,
-                            );
-                            counter += 1;
-                        }
-
-                        (t, true)
-                    }
-                    Value::Dereference(_) => unimplemented!(),
-                    Value::Reference(_) => unimplemented!(),
-                    Value::ReferenceMutable(_) => unimplemented!(),
-                    Value::Tuple(_vals) => {
-                        unimplemented!()
-                    }
-                    Value::Unit => (q, true),
-                    Value::Variable(a) => match a.clone() {
-                        Variable::Named(_) => (q.swap(var, val), true),
-                        Variable::ArrayElem(name, index) => {
-                            // TODO: won't work for tuples
-
-                            match var {
-                                //                                Variable::ArrayElem(arr_name, arr_index) => (
-                                //                                    q.swap(
-                                //                                        var,
-                                //                                        Value::Ternary(
-                                //                                            Bool::Equal(index, arr_index),
-                                //                                            val,
-                                //                                            Value::Variable(Variable::ArrayElem(
-                                //                                                arr_name, arr_index,
-                                //                                            )),
-                                //                                        ),
-                                //                                    ),
-                                //                                    true,
-                                //                                ),
-                                _ => (q.swap(var, val), true),
-                            }
-                        }
-                        Variable::TupleElem(_name, _index) => {
-                            // This is conditional
-                            // a[X] = Y
-                            // for all a[Z] do:
-                            //     if Z == X:
-                            //         a[Z] = Y
-                            //     else:
-                            //         a[Z] = a[Z]
-                            // So it seems this one has to be implemented using Z3's ite?
-                            unimplemented!()
-                        }
-                        Variable::Empty => (q, true),
-                    },
-                    Value::FunctionCall(_name, _args) => unimplemented!(),
-                    Value::Ternary(cond, a, b) => {
-                        // TODO: important for arrays
-                        unimplemented!()
-                    }
-                }
-                */
             }
         }
     }
@@ -556,6 +451,7 @@ impl Provable for Block {
                 let mut ps = Vec::new();
                 for mut c in comms {
                     // This is pretty stupid, but hey...
+                    // TODO: this can be just removed I think, do it in another commit
                     c.push(Command::Noop);
                     c.push(Command::ProveControl(ProveControl::Assert(q.clone())));
 
@@ -611,18 +507,19 @@ impl Provable for Block {
             Block::While(cond, comms, inv) => {
                 // TODO: this is strong invariant, we don't look for it yet, but should be added
                 let strong_inv = inv.clone();
-                //Bool::And(Box::new(inv.clone()), Box::new(q.clone()));
 
                 let pre = Bool::And(Box::new(strong_inv.clone()), Box::new(cond.clone()));
 
-                // First check that the invariant works, so inv && cond -> inv
-                let inv_prove = prove_block(pre, comms.clone(), inv.clone());
+                // First check that the invariant works
+                // inv && cond -> inv
+                let inv_prove = prove_block(pre, comms.clone(), strong_inv.clone());
 
                 if !inv_prove.simple_check() {
                     return (Bool::True, false);
                 }
 
-                // Also check that not condition && invariant => post
+                // Also check the real thing, so if we're out of the loop then it means that post is achieved
+                // not condition && invariant => post
                 let pre_not = Bool::And(
                     Box::new(strong_inv.clone()),
                     Box::new(Bool::Not(Box::new(cond.clone()))),
@@ -635,8 +532,8 @@ impl Provable for Block {
                 }
 
                 // At this point, just return the real computed {p}
-                // TODO: this is probably not going to be inv
-                (inv, true)
+                // TODO: this is probably not going to be just strong_inv or is it?
+                (strong_inv, true)
             }
             Block::ForRange(_iter, _first, _last, _comms, _inv) => {
                 unimplemented!()
