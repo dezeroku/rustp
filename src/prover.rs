@@ -121,6 +121,12 @@ impl ProveBlock {
             postcondition.clone(),
         )));
 
+        log::trace!("OUR CODE - START");
+        for i in commands.clone() {
+            log::trace!("{}", i);
+        }
+        log::trace!("OUR CODE - END");
+
         let mut triples = Vec::new();
 
         let mut code_till_now = Vec::new();
@@ -137,7 +143,7 @@ impl ProveBlock {
                     triples.push(ProveBlock {
                         precondition: precondition.clone(),
                         code: code_till_now.clone(),
-                        postcondition: a,
+                        postcondition: a.clone(),
                     });
                 }
                 z => {
@@ -189,6 +195,7 @@ impl ProveBlock {
                     if !t {
                         return (self, false);
                     }
+                    // new q is previous p
                     q = _q;
                     log::trace!("PRE AFTER: {}", q.clone());
                     log::trace!("{}", q);
@@ -312,7 +319,6 @@ pub fn prove(input: Program, funcs_to_prove: Vec<String>) -> bool {
             let (current, temp_res) = i.calculate();
 
             if temp_res {
-                log::trace!("LOL");
                 final_res = current.prove();
             } else {
                 final_res = temp_res;
@@ -414,8 +420,7 @@ impl Provable for Assignment {
                         // So it seems this one has to be implemented using Z3's ite?
                         // Does this have a potential for some kind of an infinite recursion?
 
-                        log::trace!("DEADBEEF!");
-                        (q.index_swap(arr_name, *index, val), true)
+                        (q.index_swap(arr_name, *index, val.clone()), true)
                     }
                 }
                 /*

@@ -794,6 +794,7 @@ pub trait Swapper {
 
 impl Swapper for Bool {
     fn swap(self, var: Variable, val: Value) -> Self {
+        log::trace!("SWAP: {} {} {}", self.clone(), var.clone(), val.clone());
         match self.clone() {
             Bool::ForAll(a, b) => Bool::ForAll(a, Box::new(b.swap(var, val))),
             Bool::Exists(a, b) => Bool::Exists(a, Box::new(b.swap(var, val))),
@@ -830,6 +831,14 @@ impl Swapper for Bool {
     }
 
     fn index_swap(self, name: String, index: Value, val: Value) -> Self {
+        log::trace!(
+            "INDEX_SWAP: {} {} {} {}",
+            self.clone(),
+            name.clone(),
+            index.clone(),
+            val.clone()
+        );
+
         match self.clone() {
             Bool::ForAll(a, b) => Bool::ForAll(a, Box::new(b.index_swap(name, index, val))),
             Bool::Exists(a, b) => Bool::Exists(a, Box::new(b.index_swap(name, index, val))),
@@ -883,6 +892,7 @@ impl Swapper for Bool {
 
 impl Swapper for Expr {
     fn swap(self, var: Variable, val: Value) -> Self {
+        log::trace!("SWAP: {} {} {}", self.clone(), var.clone(), val.clone());
         match self.clone() {
             Expr::Number(_) => self,
             Expr::Op(a, op, b) => Expr::Op(
@@ -895,6 +905,14 @@ impl Swapper for Expr {
     }
 
     fn index_swap(self, name: String, index: Value, val: Value) -> Self {
+        log::trace!(
+            "INDEX_SWAP: {} {} {} {}",
+            self.clone(),
+            name.clone(),
+            index.clone(),
+            val.clone()
+        );
+
         match self.clone() {
             Expr::Number(_) => self,
             Expr::Op(a, op, b) => Expr::Op(
@@ -909,14 +927,25 @@ impl Swapper for Expr {
 
 impl Swapper for Value {
     fn swap(self, var: Variable, val: Value) -> Self {
+        log::trace!("SWAP: {} {} {}", self.clone(), var.clone(), val.clone());
         match self.clone() {
             Value::Expr(a) => Value::Expr(a.swap(var, val)),
             Value::Bool(a) => Value::Bool(a.swap(var, val)),
             Value::Variable(a) => {
-                if a == var {
-                    val
-                } else {
-                    Value::Variable(a)
+                // Handle arrays properly
+                match a.clone() {
+                    Variable::Named(_) => {
+                        if a == var {
+                            val
+                        } else {
+                            Value::Variable(a)
+                        }
+                    }
+                    Variable::ArrayElem(name, index) => {
+                        Value::Variable(Variable::ArrayElem(name, Box::new(index.swap(var, val))))
+                    }
+                    Variable::TupleElem(_name, _index) => unimplemented!(),
+                    Variable::Empty => Value::Variable(a),
                 }
             }
             Value::Tuple(vec) => {
@@ -953,6 +982,13 @@ impl Swapper for Value {
     }
 
     fn index_swap(self, name: String, index: Value, val: Value) -> Self {
+        log::trace!(
+            "INDEX_SWAP: {} {} {} {}",
+            self.clone(),
+            name.clone(),
+            index.clone(),
+            val.clone()
+        );
         match self.clone() {
             Value::Expr(a) => Value::Expr(a.index_swap(name, index, val)),
             Value::Bool(a) => Value::Bool(a.index_swap(name, index, val)),

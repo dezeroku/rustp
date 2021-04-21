@@ -1550,6 +1550,7 @@ fn prove_array_elem_var_fail1() {
     ));
 }
 
+#[ignore]
 #[test]
 fn prove_array_dummy1() {
     assert!(prove(
@@ -1579,6 +1580,7 @@ fn prove_array_dummy1() {
     ));
 }
 
+#[ignore]
 #[test]
 fn prove_array_dummy_fail1() {
     assert!(!prove(
@@ -1608,6 +1610,7 @@ fn prove_array_dummy_fail1() {
     ));
 }
 
+#[ignore]
 #[test]
 fn prove_array_dummy_variable_index1() {
     assert!(prove(
@@ -1645,6 +1648,7 @@ fn prove_array_dummy_variable_index1() {
     ));
 }
 
+#[ignore]
 #[test]
 fn prove_array_dummy_variable_index_fail1() {
     assert!(!prove(
