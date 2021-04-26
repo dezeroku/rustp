@@ -10,6 +10,9 @@ edition = "2018"
 nom = "6.1.2"
 itertools = "0.10.0"
 clap = "3.0.0-beta.2"
-z3 = "0.10.0"
+z3 = {version="0.10.0", features = ["static-link-z3"]}
+# For faster development iterations use the below dependency instead of the one above
+# (it requires z3 library to be available in the system)
+#z3 = "0.10.0"
 log = "0.4.14"
 env_logger = "0.8.3"

@@ -1,15 +1,14 @@
-FROM python:3.9 as z3
-RUN mkdir -p /z3_built
-COPY z3 /z3
-WORKDIR /z3
-RUN python3 scripts/mk_make.py --prefix=/z3_built
-WORKDIR /z3/build
-RUN make -j2
-RUN make install
-
-FROM rust:1.50.0-alpine as rust
+FROM rust:1.50.0 as rust
 RUN cargo new rustp
 WORKDIR ./rustp
+
+# Install dependencies for Z3 compilation
+RUN apt-get update && \
+    apt-get install -y \
+    cmake \
+    g++ \
+    python3 \
+    python3-distutils
 
 # Get dependencies
 COPY ./Cargo.toml ./Cargo.lock ./
@@ -21,11 +20,9 @@ RUN cargo build --release && \
 ADD ./src/ ./src/
 RUN cargo build --release
 
-# Copy just rustc to make the image smaller
+# Copy just rustp to make the final image smaller
 FROM rust:1.50.0 as final
-COPY --from=z3 /z3_built/bin /usr/bin
-COPY --from=z3 /z3_built/lib /usr/lib
-COPY --from=z3 /z3_built/include /usr/include
+WORKDIR /workdir
 COPY --from=rust /rustp/target/release/rustp /usr/bin
 
-CMD ["rustp"]
+ENTRYPOINT ["rustp"]
