@@ -11,7 +11,7 @@ env:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     steps:
     - uses: actions/checkout@v2
@@ -31,7 +31,7 @@ jobs:
     needs: test
 
       # Push images to GHCR.
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
 
     if: github.event_name == 'push'
 
