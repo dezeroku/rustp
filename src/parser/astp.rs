@@ -260,7 +260,7 @@ fn command(input: &str) -> IResult<&str, ast::Command> {
         assignment,
         if_else,
         while_parse,
-        for_parse,
+        //for_parse,
     ))(input)
 }
 
