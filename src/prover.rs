@@ -93,12 +93,16 @@ fn define_return_value(output: Type, return_value: Value) -> Command {
         Type::ReferenceMutable(_x) => {
             unimplemented!()
         }
-        Type::Tuple(_) => Command::Binding(Binding::Assignment(
-            Variable::Named(String::from("return_value")),
-            output,
-            return_value,
-            false,
-        )),
+        Type::Tuple(_) => {
+            //TODO: add support
+            //Command::Binding(Binding::Assignment(
+            //Variable::Named(String::from("return_value")),
+            //output,
+            //return_value,
+            //false,
+            //))
+            Command::Noop
+        }
         Type::Unit => Command::Noop,
     }
 }
@@ -444,7 +448,25 @@ impl Provable for Assignment {
                 // Swap all `var` occurences with the `val` in the condition
                 // Supports only simple int, bool and arrayelem assignments for now
                 match var.clone() {
-                    Variable::Named(_) => (q.swap(var, val), true),
+                    Variable::Named(name) => match val.clone() {
+                        Value::Array(vals) => {
+                            // Bunch of individual assignments
+                            let mut i = 0;
+                            let mut temp = q;
+                            for v in vals {
+                                let tvar = Variable::ArrayElem(
+                                    name.clone(),
+                                    Box::new(Value::Expr(Expr::Number(i))),
+                                );
+                                let ass = Assignment::Single(tvar, v);
+                                let (_temp, _) = ass.get_pre(temp, p.clone());
+                                temp = _temp;
+                                i += 1;
+                            }
+                            (temp, true)
+                        }
+                        _ => (q.swap(var, val), true),
+                    },
                     Variable::TupleElem(_, _) => unimplemented!(),
                     Variable::Empty => (q, true),
                     Variable::ArrayElem(arr_name, index) => {
