@@ -16,6 +16,42 @@ fn prove_block(precondition: Bool, code: Vec<Command>, postcondition: Bool) -> P
     }
 }
 
+fn prove_impl(p: Bool, q: Bool) -> bool {
+    let mut cfg = z3::Config::new();
+    cfg.set_model_generation(true);
+
+    let ctx = z3::Context::new(&cfg);
+    let t = z3::Solver::new(&ctx);
+
+    t.assert(
+        &p.clone()
+            .as_bool(&ctx)
+            .implies(&q.clone().as_bool(&ctx))
+            .not(),
+    );
+
+    let f = t.check();
+    log::debug!("{:?}", f);
+    log::debug!("{:?}", t.get_model());
+    let result = Some(f);
+
+    match result {
+        Some(z3::SatResult::Sat) => {
+            log::debug!("Model: {:?}", t.get_model());
+            log::info!("Failed to prove: {} => {}", p, q);
+            return false;
+        }
+        Some(z3::SatResult::Unsat) => {
+            log::info!("Proven: {} => {}", p, q);
+        }
+        _ => {
+            panic!("Unknown result!")
+        }
+    }
+
+    true
+}
+
 #[derive(Clone, Debug)]
 struct ProveBlock {
     precondition: Bool,
@@ -178,6 +214,8 @@ impl ProveBlock {
             postcondition_original: q_orig,
         } = self.clone();
 
+        let comms_real = _comms.clone();
+
         let mut comms = Vec::new();
         // Invert array for proving - backwards
         let mut check = true;
@@ -217,7 +255,7 @@ impl ProveBlock {
         (
             ProveBlock {
                 precondition: p,
-                code: comms,
+                code: comms_real,
                 postcondition: q,
                 precondition_original: p_orig,
                 postcondition_original: q_orig,
@@ -504,9 +542,40 @@ impl Provable for Block {
 
                 (to_return, true)
             }
-            Block::While(cond, comms, inv) => {
+            Block::While(cond, comms, inv, var) => {
                 // TODO: this is strong invariant, we don't look for it yet, but should be added
                 let strong_inv = inv.clone();
+
+                if var == Expr::Number(0) {
+                    log::warn!("No loop variant provided for loop with invariant: {}", inv);
+                } else {
+                    // Prove the loop variant
+                    // {cond && inv && t == z} code {t < z}
+                    let old_var = Expr::Value(Box::new(Value::Variable(Variable::Named(
+                        String::from("__variant_old"),
+                    ))));
+
+                    let var_pre = Bool::And(
+                        Box::new(cond.clone()),
+                        Box::new(Bool::And(
+                            Box::new(strong_inv.clone()),
+                            Box::new(Bool::Equal(var.clone(), old_var.clone())),
+                        )),
+                    );
+                    let var_post = Bool::LowerThan(var.clone(), old_var);
+
+                    let var_prove = prove_block(var_pre, comms.clone(), var_post);
+
+                    if !var_prove.simple_check() {
+                        return (Bool::True, false);
+                    }
+
+                    // Now let's prove that invariant implies that variant >= 0
+                    let var_post = Bool::GreaterEqual(var.clone(), Expr::Number(0));
+                    if !prove_impl(strong_inv.clone(), var_post) {
+                        return (Bool::True, false);
+                    }
+                }
 
                 let pre = Bool::And(Box::new(strong_inv.clone()), Box::new(cond.clone()));
 
@@ -525,9 +594,14 @@ impl Provable for Block {
                     Box::new(strong_inv.clone()),
                 );
 
-                let real_prove = prove_block(pre_not, comms.clone(), q.clone());
+                // TODO; should this be a real code based check or should we use implication check?
+                //let real_prove = prove_block(pre_not, comms.clone(), q.clone());
 
-                if !real_prove.simple_check() {
+                //if !real_prove.simple_check() {
+                //    return (Bool::True, false);
+                //}
+
+                if !prove_impl(pre_not, q.clone()) {
                     return (Bool::True, false);
                 }
 

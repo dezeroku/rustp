@@ -449,6 +449,7 @@ fn for_parse(input: &str) -> IResult<&str, ast::Command> {
 fn while_parse(input: &str) -> IResult<&str, ast::Command> {
     tuple((
         loop_invariant,
+        opt(loop_variant),
         space0,
         tag("while"),
         space1,
@@ -460,12 +461,18 @@ fn while_parse(input: &str) -> IResult<&str, ast::Command> {
         multispace0,
         tag("}"),
     ))(input)
-    .and_then(|(next_input, (inv, _, _, _, c, _, _, _, comms, _, _))| {
-        Ok((
-            next_input,
-            ast::Command::Block(ast::Block::While(*c, comms, inv)),
-        ))
-    })
+    .and_then(
+        |(next_input, (inv, _var, _, _, _, c, _, _, _, comms, _, _))| {
+            let var = match _var {
+                Some(x) => x,
+                None => ast::Expr::Number(0),
+            };
+            Ok((
+                next_input,
+                ast::Command::Block(ast::Block::While(*c, comms, inv, var)),
+            ))
+        },
+    )
 }
 
 fn if_else(input: &str) -> IResult<&str, ast::Command> {
@@ -568,14 +575,32 @@ fn assert(input: &str) -> IResult<&str, ast::Command> {
 
 fn loop_invariant(input: &str) -> IResult<&str, ast::Bool> {
     tuple((
+        space0,
         prove_start,
         tag("invariant"),
         space1,
         boolean::expr,
+        space0,
         newline,
     ))(input)
     .map(|(next_input, res)| {
-        let (_, _, _, a, _) = res;
+        let (_, _, _, _, a, _, _) = res;
+        (next_input, *a)
+    })
+}
+
+fn loop_variant(input: &str) -> IResult<&str, ast::Expr> {
+    tuple((
+        space0,
+        prove_start,
+        tag("variant"),
+        space1,
+        math::expr,
+        space0,
+        newline,
+    ))(input)
+    .map(|(next_input, res)| {
+        let (_, _, _, _, a, _, _) = res;
         (next_input, *a)
     })
 }

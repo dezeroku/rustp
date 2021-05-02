@@ -291,8 +291,8 @@ pub enum Block {
     If(Vec<Bool>, Vec<Vec<Command>>, Vec<Command>),
     /// iterator's name, first range elem, second range elem, commands, invariant
     ForRange(Variable, Value, Value, Vec<Command>, Bool),
-    /// condition, commands, invariant
-    While(Bool, Vec<Command>, Bool),
+    /// condition, commands, invariant, variant
+    While(Bool, Vec<Command>, Bool, Expr),
 }
 
 impl fmt::Display for Block {
@@ -329,13 +329,13 @@ impl fmt::Display for Block {
                     inv, i, a, b, temp
                 )
             }
-            Block::While(c, comms, inv) => {
+            Block::While(c, comms, inv, var) => {
                 let mut temp = String::new();
                 for i in comms {
                     temp += &format!("{}\n", i).to_owned();
                 }
 
-                write!(f, "[{}] while {} (\n{}\n)", inv, c, temp)
+                write!(f, "[{}][{}] while {} (\n{}\n)", inv, var, c, temp)
             }
         }
     }
@@ -495,7 +495,7 @@ impl AffectedVarGetter for Block {
 
                 a
             }
-            Block::While(_, vec, _) => {
+            Block::While(_, vec, _, _) => {
                 let mut a = HashSet::new();
                 for i in vec {
                     let t = i.get_affected_variables();
@@ -607,7 +607,7 @@ impl VarGetter for Block {
 
                 a
             }
-            Block::While(b, vec, c) => {
+            Block::While(b, vec, c, var) => {
                 let mut a = b.get_variables();
                 a.extend(c.get_variables());
 
@@ -615,6 +615,8 @@ impl VarGetter for Block {
                     let t = i.get_variables();
                     a.extend(t);
                 }
+
+                a.extend(var.get_variables());
 
                 a
             }

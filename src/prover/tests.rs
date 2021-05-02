@@ -1021,7 +1021,8 @@ fn prove_while_invariant1() {
                             Opcode::Mul,
                             Box::new(Expr::Number(2))
                         )
-                    )
+                    ),
+                    Expr::Number(0)
                 ))],
                 input: vec![],
                 output: Type::Unit,
@@ -1119,7 +1120,8 @@ fn prove_while_invariant_fail_1() {
                             Opcode::Mul,
                             Box::new(Expr::Number(2))
                         )
-                    )
+                    ),
+                    Expr::Number(0)
                 ))],
                 input: vec![],
                 output: Type::Unit,
@@ -1145,6 +1147,121 @@ fn prove_while_invariant_fail_1() {
                         ))
                     ))
                 ),
+                postcondition: Bool::True,
+                return_value: Value::Unit
+            }]
+        },
+        vec![]
+    ));
+}
+
+#[test]
+fn prove_while_variant1() {
+    /*
+    let mut i: i32 = 10;
+    //%invariant i >= 0
+    //%variant i
+    while i > 0 {
+        i = i - 1;
+    }
+    */
+    assert!(prove(
+        Program {
+            content: vec![Function {
+                name: String::from("test"),
+                content: vec![
+                    Command::Binding(Binding::Assignment(
+                        Variable::Named(String::from("i")),
+                        Type::I32,
+                        Value::Expr(Expr::Number(10)),
+                        true,
+                    )),
+                    Command::Block(Block::While(
+                        Bool::GreaterThan(
+                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                                "i"
+                            ))))),
+                            Expr::Number(0)
+                        ),
+                        vec![Command::Assignment(Assignment::Single(
+                            Variable::Named(String::from("i")),
+                            Value::Expr(Expr::Op(
+                                Box::new(Expr::Value(Box::new(Value::Variable(Variable::Named(
+                                    String::from("i")
+                                ))))),
+                                Opcode::Sub,
+                                Box::new(Expr::Number(1))
+                            ))
+                        )),],
+                        Bool::GreaterEqual(
+                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                                "i"
+                            ))))),
+                            Expr::Number(0)
+                        ),
+                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                            "i"
+                        )))))
+                    ))
+                ],
+                input: vec![],
+                output: Type::Unit,
+                precondition: Bool::True,
+                postcondition: Bool::True,
+                return_value: Value::Unit
+            }]
+        },
+        vec![]
+    ));
+}
+
+#[test]
+fn prove_while_variant_fail_1() {
+    /*
+    let mut i: i32 = 10;
+    //%invariant true
+    //%variant a
+    while i > 0 {
+        i = i - 1;
+    }
+    */
+    assert!(!prove(
+        Program {
+            content: vec![Function {
+                name: String::from("test"),
+                content: vec![
+                    Command::Binding(Binding::Assignment(
+                        Variable::Named(String::from("i")),
+                        Type::I32,
+                        Value::Expr(Expr::Number(10)),
+                        true,
+                    )),
+                    Command::Block(Block::While(
+                        Bool::GreaterThan(
+                            Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                                "i"
+                            ))))),
+                            Expr::Number(0)
+                        ),
+                        vec![Command::Assignment(Assignment::Single(
+                            Variable::Named(String::from("i")),
+                            Value::Expr(Expr::Op(
+                                Box::new(Expr::Value(Box::new(Value::Variable(Variable::Named(
+                                    String::from("i")
+                                ))))),
+                                Opcode::Sub,
+                                Box::new(Expr::Number(1))
+                            ))
+                        )),],
+                        Bool::True,
+                        Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
+                            "a"
+                        )))))
+                    ))
+                ],
+                input: vec![],
+                output: Type::Unit,
+                precondition: Bool::True,
                 postcondition: Bool::True,
                 return_value: Value::Unit
             }]
@@ -1234,7 +1351,8 @@ fn prove_while_postcondition1() {
                             Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
                                 "x"
                             )))))
-                        )
+                        ),
+                        Expr::Number(0)
                     ))
                 ],
                 input: vec![],
@@ -1361,7 +1479,8 @@ fn prove_while_postcondition_fail1() {
                             Expr::Value(Box::new(Value::Variable(Variable::Named(String::from(
                                 "x"
                             )))))
-                        )
+                        ),
+                        Expr::Number(0)
                     ))
                 ],
                 input: vec![],

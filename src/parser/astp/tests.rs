@@ -973,7 +973,44 @@ fn while_parse1() {
                     String::from("i")
                 )))),
                 Vec::new(),
-                ast::Bool::True
+                ast::Bool::True,
+                ast::Expr::Number(0)
+            ))
+    );
+
+    assert!(
+        while_parse("//%invariant true\n//%variant x-2\nwhile i {}")
+            .unwrap()
+            .1
+            == ast::Command::Block(ast::Block::While(
+                ast::Bool::Value(Box::new(ast::Value::Variable(ast::Variable::Named(
+                    String::from("i")
+                )))),
+                Vec::new(),
+                ast::Bool::True,
+                ast::Expr::Op(
+                    Box::new(ast::Expr::Value(Box::new(ast::Value::Variable(
+                        ast::Variable::Named(String::from("x"))
+                    )))),
+                    ast::Opcode::Sub,
+                    Box::new(ast::Expr::Number(2))
+                )
+            ))
+    );
+
+    assert!(
+        while_parse("//%invariant true\n //%variant x\nwhile i {}")
+            .unwrap()
+            .1
+            == ast::Command::Block(ast::Block::While(
+                ast::Bool::Value(Box::new(ast::Value::Variable(ast::Variable::Named(
+                    String::from("i")
+                )))),
+                Vec::new(),
+                ast::Bool::True,
+                ast::Expr::Value(Box::new(ast::Value::Variable(ast::Variable::Named(
+                    String::from("x")
+                ))))
             ))
     );
 
@@ -989,7 +1026,12 @@ fn while_parse1() {
         while_parse("//%invariant true\n  while true {let x: i32 = 1;}")
             .unwrap()
             .1,
-        ast::Command::Block(ast::Block::While(ast::Bool::True, temp, ast::Bool::True))
+        ast::Command::Block(ast::Block::While(
+            ast::Bool::True,
+            temp,
+            ast::Bool::True,
+            ast::Expr::Number(0)
+        ))
     );
 }
 

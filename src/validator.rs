@@ -263,14 +263,14 @@ fn no_undefined_logic(
                     }
                 }
             }
-            Command::Block(Block::While(_, vec, _a)) => {
+            Command::Block(Block::While(_, vec, _a, _var)) => {
                 let mut temp = definitions.clone();
 
                 if !no_undefined_logic(vec, &mut temp, &functions) {
                     return false;
                 }
 
-                // TODO: properly handle checking the ForAll and Exists cases in the invariant
+                // TODO: properly handle checking the ForAll and Exists cases in the invariant and variant
                 //def_push(&mut temp, a);
                 //for i in get_namedecs(a) {
                 //    if !no_undefined_check(&mut definitions, &functions, i) {
@@ -369,7 +369,7 @@ fn no_forbidden_decs_logic(content: Vec<Command>) -> bool {
                     return false;
                 }
             }
-            Command::Block(Block::While(_, vec, _)) => {
+            Command::Block(Block::While(_, vec, _, _)) => {
                 if !no_forbidden_decs_logic(vec) {
                     return false;
                 }
@@ -475,7 +475,7 @@ fn no_shadowing_logic(content: Vec<Command>, mut definitions: &mut Vec<String>) 
                     return false;
                 }
             }
-            Command::Block(Block::While(_, vec, _)) => {
+            Command::Block(Block::While(_, vec, _, _)) => {
                 let mut temp = definitions.clone();
 
                 if !no_shadowing_logic(vec, &mut temp) {

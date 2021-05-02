@@ -213,12 +213,20 @@ fn get_variables_block_while1() {
                 Value::Unit,
                 false
             )),],
-            Bool::True
+            Bool::True,
+            Expr::Op(
+                Box::new(Expr::Value(Box::new(Value::Variable(Variable::Named(
+                    String::from("y")
+                ))))),
+                Opcode::Sub,
+                Box::new(Expr::Number(2))
+            )
         )
         .get_variables(),
         set![
             Variable::Named(String::from("check")),
-            Variable::Named(String::from("x"))
+            Variable::Named(String::from("x")),
+            Variable::Named(String::from("y"))
         ]
     );
 }

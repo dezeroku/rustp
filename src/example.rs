@@ -15,6 +15,24 @@ fn max(a: &[i32], n: usize) -> i32 {
     max
 }
 
+fn test5(mut a: i32) {
+    let mut i: i32 = 10;
+    //%invariant true
+    //%variant a
+    while i > 0 {
+        i = i - 1;
+    }
+}
+
+fn test4(mut a: i32) {
+    let mut i: i32 = 10;
+    //%invariant i >= 0
+    //%variant i
+    while i > 0 {
+        i = i - 1;
+    }
+}
+
 fn test3(mut a: i32) {
     a = 123;
     let mut t: [i32; 3] = [0, 0, 0];
