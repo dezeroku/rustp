@@ -54,11 +54,11 @@ pub enum Bool {
 impl fmt::Display for Bool {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            Bool::ForAll(a, b) => write!(f, "forall {} [{}]", a, b),
-            Bool::Exists(a, b) => write!(f, "exists {} [{}]", a, b),
-            Bool::And(a, b) => write!(f, "{} && {}", a, b),
-            Bool::Or(a, b) => write!(f, "{} || {}", a, b),
-            Bool::Not(a) => write!(f, "!{}", a),
+            Bool::ForAll(a, b) => write!(f, "forall {} ( {} )", a, b),
+            Bool::Exists(a, b) => write!(f, "exists {} ( {} )", a, b),
+            Bool::And(a, b) => write!(f, "({} && {})", a, b),
+            Bool::Or(a, b) => write!(f, "({} || {})", a, b),
+            Bool::Not(a) => write!(f, "!({})", a),
             Bool::Value(a) => write!(f, "{}", a),
             Bool::True => write!(f, "true"),
             Bool::False => write!(f, "false"),

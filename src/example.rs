@@ -1,3 +1,20 @@
+//%precondition n > 0
+//%postcondition (forall x !(x >= 0 && x < n) || max >= a[x]) && (exists x x >= 0 && x < n && max == a[x])
+fn max(a: &[i32], n: usize) -> i32 {
+    let mut max: i32 = a[0];
+    let mut i: usize = 1;
+    let t: i32 = -1;
+
+    //%invariant (forall y !(y >= 0 && y < i) || max >= a[y]) && (exists x x >= 0 && x < i && max == a[x]) && i <= n && n > 0
+    while i < n {
+        if max < a[i] {
+            max = a[i];
+        }
+        i = i + 1;
+    }
+    max
+}
+
 fn test3(mut a: i32) {
     a = 123;
     let mut t: [i32; 3] = [0, 0, 0];
@@ -19,8 +36,11 @@ fn test2() {
     let mut t: [i32; 3] = [0, 0, 0];
     //t = [1, 2, 3];
     t[1] = 2;
+    t[0] = 4;
+    t[1] = 2;
     let b: i32 = 1;
     //%assert t[b] == 2
+    //%assert exists i t[i] > 0
 }
 
 fn dummy() {

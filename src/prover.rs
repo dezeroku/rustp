@@ -521,8 +521,8 @@ impl Provable for Block {
                 // Also check the real thing, so if we're out of the loop then it means that post is achieved
                 // not condition && invariant => post
                 let pre_not = Bool::And(
-                    Box::new(strong_inv.clone()),
                     Box::new(Bool::Not(Box::new(cond.clone()))),
+                    Box::new(strong_inv.clone()),
                 );
 
                 let real_prove = prove_block(pre_not, comms.clone(), q.clone());
