@@ -3,7 +3,7 @@ use crate::ast;
 use crate::parser::astp;
 
 use nom::{
-    branch::alt, bytes::complete::take_while1, character::complete::char,
+    branch::alt, bytes::complete::tag, bytes::complete::take_while1, character::complete::char,
     character::complete::one_of, character::complete::space0, multi::many0, sequence::tuple,
     IResult,
 };
@@ -98,6 +98,10 @@ pub fn expr(input: &str) -> IResult<&str, Box<ast::Expr>> {
 }
 
 fn expr_number(input: &str) -> IResult<&str, Box<ast::Expr>> {
+    alt((_expr_number_negative, _expr_number_positive))(input)
+}
+
+fn _expr_number_positive(input: &str) -> IResult<&str, Box<ast::Expr>> {
     match number(input) {
         Ok(a) => {
             let (next_input, val) = a;
@@ -105,6 +109,11 @@ fn expr_number(input: &str) -> IResult<&str, Box<ast::Expr>> {
         }
         Err(e) => Err(e),
     }
+}
+
+fn _expr_number_negative(input: &str) -> IResult<&str, Box<ast::Expr>> {
+    tuple((tag("-"), number))(input)
+        .and_then(|(next_input, (_, val))| Ok((next_input, Box::new(ast::Expr::Number(-val)))))
 }
 
 fn expr_r_value(input: &str) -> IResult<&str, Box<ast::Expr>> {
