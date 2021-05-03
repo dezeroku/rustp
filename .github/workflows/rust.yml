@@ -66,9 +66,7 @@ jobs:
         uses: actions/cache@v2
         with:
           path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ env.IMAGE_NAME }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-${{ env.IMAGE_NAME }}-
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       -
         name: Login to GHCR
