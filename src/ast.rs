@@ -290,6 +290,7 @@ pub enum Block {
     /// vector of conditions for if/elif, vector of vectors of commands for if/elif, vector of commands for else
     If(Vec<Bool>, Vec<Vec<Command>>, Vec<Command>),
     /// iterator's name, first range elem, second range elem, commands, invariant
+    #[allow(dead_code)]
     ForRange(Variable, Value, Value, Vec<Command>, Bool),
     /// condition, commands, invariant, variant
     While(Bool, Vec<Command>, Bool, Expr),

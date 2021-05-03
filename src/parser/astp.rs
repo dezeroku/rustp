@@ -414,6 +414,7 @@ fn assignment_tuple_single(input: &str) -> IResult<&str, ast::Command> {
     })
 }
 
+#[allow(dead_code)]
 fn for_parse(input: &str) -> IResult<&str, ast::Command> {
     tuple((
         loop_invariant,
