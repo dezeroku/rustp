@@ -317,9 +317,12 @@ impl ProveBlock {
                 for i in commands {
                     temp += &format!("{}\n", i).to_owned();
                 }
-                println!(
+                println!("Failed to prove: {} => {}", p, q);
+                log::info!(
                     "Failed to prove: {} => {} with code:\n{}",
-                    p_orig, q_orig, temp
+                    p_orig,
+                    q_orig,
+                    temp
                 );
                 log::debug!("Failed to prove: {} => {}", p, q);
                 return false;
@@ -691,6 +694,7 @@ impl ProvableValue for Value {
                         Value::Variable(x) => {
                             Value::Expr(Expr::Value(Box::new(Value::Variable(x)))).as_int(ctx)
                         }
+                        Value::Expr(x) => Value::Expr(x).as_int(ctx),
                         _ => panic!("Bool value ({}) used as an int", b),
                     },
                     _ => panic!("Bool value ({}) used as an int", b),
