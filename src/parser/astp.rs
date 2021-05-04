@@ -1229,13 +1229,16 @@ fn array_slice_type(input: &str) -> IResult<&str, ast::Type> {
     tuple((
         char('&'),
         space0,
+        opt(tag("mut")),
+        space0,
         char('['),
         space0,
         type_def_single,
         space0,
         char(']'),
     ))(input)
-    .and_then(|(next_input, (_, _, _, _, t, _, _))| {
+    .and_then(|(next_input, (_, _, _m, _, _, _, t, _, _))| {
+        // TODO: mutability is not handled in this case
         Ok((next_input, ast::Type::ArraySlice(Box::new(t))))
     })
 }
