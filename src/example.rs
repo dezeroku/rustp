@@ -1,3 +1,10 @@
+fn overflow() {
+    let max: i32 = 10000000;
+    let i: i32 = 100000 * 100000000 * 1000000000;
+    let j: i32 = max * i;
+    //%assert j == i * max
+}
+
 //%precondition n > 0
 //%postcondition (forall x !(x >= 0 && x < n) || max >= a[x]) && (exists x x >= 0 && x < n && max == a[x])
 fn max(a: &[i32], n: usize) -> i32 {
