@@ -1,4 +1,5 @@
 use crate::ast::*;
+use crate::set_nonmut as set;
 use log;
 use std::collections::HashSet;
 use std::convert::TryInto;
@@ -6,19 +7,6 @@ use z3;
 
 #[cfg(test)]
 mod tests;
-
-macro_rules! set {
-    ( $( $x:expr ),* ) => {  // Match zero or more comma delimited items
-        {
-            let temp_set = HashSet::new();  // Create a mutable HashSet
-            //let mut temp_set = HashSet::new();  // Create a mutable HashSet
-            $(
-                temp_set.insert($x); // Insert each item matched into the HashSet
-            )*
-            temp_set // Return the populated HashSet
-        }
-    };
-}
 
 fn prove_block(precondition: Bool, code: Vec<Command>, postcondition: Bool) -> ProveBlock {
     ProveBlock {
