@@ -32,7 +32,7 @@ fn prove_impl(p: Bool, q: Bool) -> bool {
     // Check overflows and underflows
     for i in checks {
         t.reset();
-        t.assert(&i.check.not());
+        t.assert(&_pre.implies(&i.check).not());
         let f = t.check();
         if f != z3::SatResult::Unsat {
             log::warn!("Bounds check warning: possible {} {}", i.name, i.object);
@@ -325,7 +325,7 @@ impl ProveBlock {
         // Check overflows and underflows
         for i in checks {
             t.reset();
-            t.assert(&i.check.not());
+            t.assert(&_pre.implies(&i.check).not());
             let f = t.check();
             if f != z3::SatResult::Unsat {
                 log::warn!("Bounds check warning: possible {} {}", i.name, i.object);
