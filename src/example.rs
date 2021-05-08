@@ -10,7 +10,6 @@ fn overflow() {
 fn max(a: &[i32], n: usize) -> i32 {
     let mut max: i32 = a[0];
     let mut i: usize = 1;
-    let t: i32 = -1;
 
     //%invariant (forall y !(y >= 0 && y < i) || max >= a[y]) && (exists x x >= 0 && x < i && max == a[x]) && i <= n && n > 0
     while i < n {
