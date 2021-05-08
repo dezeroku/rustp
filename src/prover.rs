@@ -57,6 +57,10 @@ fn prove_impl(p: Bool, q: Bool) -> bool {
         Some(z3::SatResult::Unsat) => {
             log::info!("Proven: {} => {}", p, q);
         }
+        Some(z3::SatResult::Unknown) => {
+            println!("Proving stopped!");
+            return false;
+        }
         _ => {
             panic!("Unknown result!")
         }
@@ -359,6 +363,10 @@ impl ProveBlock {
             }
             Some(z3::SatResult::Unsat) => {
                 log::debug!("Proven: {:?}", commands);
+            }
+            Some(z3::SatResult::Unknown) => {
+                println!("Proving stopped!");
+                return false;
             }
             _ => {
                 panic!("Unknown result!")
