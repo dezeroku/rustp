@@ -13,6 +13,11 @@ mod bitvector;
 #[cfg(feature = "bounds_prove")]
 use bitvector::*;
 
+#[cfg(not(feature = "bounds_prove"))]
+mod int;
+#[cfg(not(feature = "bounds_prove"))]
+use int::*;
+
 fn prove_block(precondition: Bool, code: Vec<Command>, postcondition: Bool) -> ProveBlock {
     ProveBlock {
         precondition: precondition.clone(),
