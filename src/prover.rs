@@ -8,7 +8,9 @@ use z3;
 #[cfg(test)]
 mod tests;
 
+#[cfg(feature = "bounds_prove")]
 mod bitvector;
+#[cfg(feature = "bounds_prove")]
 use bitvector::*;
 
 fn prove_block(precondition: Bool, code: Vec<Command>, postcondition: Bool) -> ProveBlock {
