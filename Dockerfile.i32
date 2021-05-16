@@ -1,0 +1,28 @@
+FROM rust:1.50.0 as rust
+RUN cargo new rustp
+WORKDIR ./rustp
+
+# Install dependencies for Z3 compilation
+RUN apt-get update && \
+    apt-get install -y \
+    cmake \
+    g++ \
+    python3 \
+    python3-distutils
+
+# Get dependencies
+COPY ./Cargo.toml ./Cargo.lock ./
+RUN cargo build --release && \
+    rm src/*.rs && \
+    rm ./target/release/deps/rustp*
+
+# Build the actual binary
+ADD ./src/ ./src/
+RUN cargo build --release --features bounds_prove
+
+# Copy just rustp to make the final image smaller
+FROM rust:1.50.0 as final
+WORKDIR /workdir
+COPY --from=rust /rustp/target/release/rustp /usr/bin
+
+ENTRYPOINT ["rustp"]
