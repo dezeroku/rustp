@@ -25,7 +25,11 @@ jobs:
         key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
     - name: Run tests
-      run: cargo test --verbose
+      run: cargo test --release --verbose
+
+    - name: Run prove examples
+      run: |
+        find prove_examples/ -name "*.rs" \| xargs -I _ cargo run --release _
 
   docker-publish:
     needs: test
