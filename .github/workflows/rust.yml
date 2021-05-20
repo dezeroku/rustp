@@ -29,7 +29,7 @@ jobs:
 
     - name: Run prove examples
       run: |
-        find prove_examples/ -name "*.rs" \| xargs -I _ cargo run --release _
+        ./prove_test.sh
 
   docker-publish:
     needs: test
