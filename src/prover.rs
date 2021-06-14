@@ -50,7 +50,6 @@ fn prove_impl(p: Bool, q: Bool) -> bool {
     }
     t.reset();
 
-    // TODO: this not should not be here?
     t.assert(&_pre.implies(&_post).not());
 
     let f = t.check();
@@ -128,7 +127,6 @@ fn define_return_value(output: Type, return_value: Value) -> Command {
             unimplemented!()
         }
         Type::Tuple(_) => {
-            //TODO: add support
             //Command::Binding(Binding::Assignment(
             //Variable::Named(String::from("return_value")),
             //output,
@@ -317,7 +315,6 @@ impl ProveBlock {
         log::debug!("{} => {}", p, q);
         log::debug!("END TO PROVE FINAL LIST:");
 
-        // TODO: is this needed?
         // Isn't this kind of what we are proving separately for each case? As there's no need to
         // check that p -> q for every single command, as we control the q generation. Only assertions matter.
         //to_prove_vec_final.push((to_prove.precondition, Command::Noop, p_n));
@@ -401,7 +398,6 @@ pub fn prove(input: Program, funcs_to_prove: Vec<String>) -> bool {
 
         let wrapped_func = wrap_function(func);
 
-        // TODO: probably precondition will have to be expanded a bit
         let to_prove = prove_block(
             wrapped_func.precondition,
             wrapped_func.content,
@@ -464,7 +460,6 @@ impl Provable for Binding {
                 let mut real_vec = Vec::new();
                 for i in vec {
                     match i {
-                        // TODO: this is actually made of bindings, fix it
                         Command::Assignment(a) => {
                             real_vec.push(a);
                         }
@@ -552,8 +547,6 @@ impl Provable for Block {
                 // Calculate p for all the possible choices
                 // Then it's (p1 && cond1) || (!p1 && p2 && cond2) || (!p1 && !p2 && p3 && cond3) || ... || (!p1 && !p2 && !p3 && .. && !p3 && p_el)
 
-                // TODO: check the below implementation for any problems, it should be treated as a PoC for now
-
                 // Handle the else case
                 comms.push(el);
                 ifs.push(Bool::True);
@@ -562,13 +555,11 @@ impl Provable for Block {
                 let mut ps = Vec::new();
                 for mut c in comms {
                     // This is pretty stupid, but hey...
-                    // TODO: this can be just removed I think, do it in another commit
                     c.push(Command::Noop);
                     c.push(Command::ProveControl(ProveControl::Assert(q.clone())));
 
                     log::trace!("q BEFORE: {}", q.clone());
                     log::trace!("c: {:?}", c.clone());
-                    // TODO: Probably real precondition should be used instead of q here
                     // should it have some local context?
                     let (temp, ok) = prove_block(q.clone(), c, q.clone()).calculate();
 
@@ -616,7 +607,6 @@ impl Provable for Block {
                 (to_return, true)
             }
             Block::While(cond, comms, inv, var) => {
-                // TODO: this is strong invariant, we don't look for it yet, but should be added
                 let strong_inv = inv.clone();
 
                 if var == Expr::Number(0) {
@@ -667,7 +657,6 @@ impl Provable for Block {
                     Box::new(strong_inv.clone()),
                 );
 
-                // TODO; should this be a real code based check or should we use implication check?
                 //let real_prove = prove_block(pre_not, comms.clone(), q.clone());
 
                 //if !real_prove.simple_check() {
@@ -679,7 +668,6 @@ impl Provable for Block {
                 }
 
                 // At this point, just return the real computed {p}
-                // TODO: this is probably not going to be just strong_inv or is it?
                 (strong_inv, true)
             }
             Block::ForRange(_iter, _first, _last, _comms, _inv) => {

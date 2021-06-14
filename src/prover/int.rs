@@ -146,7 +146,6 @@ impl ProvableInt for Expr {
 
                     (checks_a, a.div(&b))
                 }
-                // TODO: should this be signed or unsigned remainder?
                 Opcode::Rem => {
                     let (mut checks_a, a) = a.as_int(ctx);
                     let (checks_b, b) = b.as_int(ctx);
@@ -165,7 +164,6 @@ impl ProvableBool for Bool {
         log::trace!("AS_BOOL: {}", self.clone());
         match self {
             Bool::ForAll(var, b) => {
-                // TODO: check when the ArrayElems are properly indexed, I don't know what's happening here
                 let (mut checks_var, var) = Value::Variable(var).as_int(ctx);
                 let (checks_b, b) = b.as_bool(ctx);
                 let forall: z3::ast::Bool =
@@ -177,7 +175,6 @@ impl ProvableBool for Bool {
                 (checks_var, forall)
             }
             Bool::Exists(var, b) => {
-                // TODO: check when the ArrayElems are properly indexed, I don't know what's happening here
                 let (mut checks_var, var) = Value::Variable(var).as_int(ctx);
                 let (checks_b, b) = b.as_bool(ctx);
                 let exists: z3::ast::Bool =

@@ -20,7 +20,6 @@ fn no_undefined(input: Program) -> bool {
         // Add function params as recognized names
         for i in func.clone().input {
             match i {
-                // TODO: clean this up
                 Binding::Declaration(name, _, _) => match name.clone() {
                     Variable::Named(x) => {
                         def_push(&mut definitions, name);
@@ -270,7 +269,6 @@ fn no_undefined_logic(
                     return false;
                 }
 
-                // TODO: properly handle checking the ForAll and Exists cases in the invariant and variant
                 //def_push(&mut temp, a);
                 //for i in get_namedecs(a) {
                 //    if !no_undefined_check(&mut definitions, &functions, i) {

@@ -635,7 +635,6 @@ fn variable_name(input: &str) -> IResult<&str, &str> {
 
 /// Defines everything what can be used on the right side of an assignment or binding.
 fn r_value(input: &str) -> IResult<&str, ast::Value> {
-    // TODO: this will be problematic due to possibility of boolean and math expr_val consuming same input, just in a different level
     // handle it somehow based on the length of input matched?
     alt((
         dereference,
@@ -927,7 +926,6 @@ fn binding_assignment_tuple_multiple(input: &str) -> IResult<&str, ast::Command>
 }
 
 fn binding_assignment(input: &str) -> IResult<&str, ast::Command> {
-    // TODO: IMPORTANT: reference and reference mutable are not real types, handle these properly somehow
     tuple((
         space0,
         tag("let"),
@@ -1238,7 +1236,6 @@ fn array_slice_type(input: &str) -> IResult<&str, ast::Type> {
         char(']'),
     ))(input)
     .and_then(|(next_input, (_, _, _m, _, _, _, t, _, _))| {
-        // TODO: mutability is not handled in this case
         Ok((next_input, ast::Type::ArraySlice(Box::new(t))))
     })
 }

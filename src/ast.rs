@@ -405,7 +405,6 @@ impl PreconditionCreator for Function {
         }
 
         // Actually add the 'old == original assertions
-        // TODO: IMPORTANT: this should actually take types in the matter, how are we supposed to compare bools?
         // If "b" is used does it mean automatically that b == true and "!b" == false, or is Z3 not that smart?
         for i in vars {
             t.precondition = Bool::And(Box::new(t.precondition), Box::new(i.old_wrapper()));
@@ -1021,12 +1020,10 @@ impl Swapper for Value {
             Value::Bool(a) => Value::Bool(a.index_swap(name, index, val)),
             Value::Variable(a) => {
                 match a.clone() {
-                    // TODO: consider also setting tuple elem here, so indexing works properly for it
                     Variable::ArrayElem(arr_name, arr_index) => {
                         if arr_name.clone() == name.clone() {
                             // This has to be taken care of via ternary
                             // Does it require us to be aple to compare Values similarly to how we do it for Expr?
-                            // TODO: So return here something like Ternary(*arr_index == index, val, arr_name[arr_index])
                             //if *arr_index == index {
                             //    return Value::Variable(Variable::ArrayElem(
                             //        arr_name,
