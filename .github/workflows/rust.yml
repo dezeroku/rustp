@@ -3,9 +3,10 @@ name: Test and release
 on:
   push:
     branches: [ master, dev ]
+    tags:
+      - '*'
   pull_request:
     branches: [ master ]
-
 env:
   CARGO_TERM_COLOR: always
 
